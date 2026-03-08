@@ -14,7 +14,7 @@ ListNameMode : Category
 # {course.originalname} -> 原始课程名（你可以在 Canvas 上随意修改课程名，但改不掉原始课程名）
 ListNameTemplateForCourse : "Canvas - {course.name}"
 # Canvas 全局通知的 Todo 列表名称
-ListNameForNotification : "Canvas"
+ListNameForNotification : "Canvas公告"
 # 若 ListNameMode 为 Category，则可指定创建 Todo 列表的名称
 ListNamesForCategory : 
   QuizListName : "Canvas"
