@@ -14,13 +14,13 @@ ListNameMode : Category
 # {course.originalname} -> 原始课程名（你可以在 Canvas 上随意修改课程名，但改不掉原始课程名）
 ListNameTemplateForCourse : "Canvas - {course.name}"
 # Canvas 全局通知的 Todo 列表名称
-ListNameForNotification : "Canvas 通知"
+ListNameForNotification : "Canvas"
 # 若 ListNameMode 为 Category，则可指定创建 Todo 列表的名称
 ListNamesForCategory : 
-  QuizListName : "Canvas 测验"
-  DiscussionListName : "Canvas 讨论"
-  AssignmentListName : "Canvas 作业"
-  AnouncementListName : "Canvas 公告"
+  QuizListName : "Canvas"
+  DiscussionListName : "Canvas"
+  AssignmentListName : "Canvas"
+  AnouncementListName : "Canvas"
 # 不处理 14 天前过期的项目
 # 如果你是在学期中开始使用本程序，建议设置为 true
 IgnoreTooOldItems : false
@@ -32,7 +32,7 @@ IgnoreErrors : false
 # e.g.
 # 若为 true，输出“处理课程 高等数学 作业 第一章作业”
 # 若为 false，输出“处理课程 1 作业 3”
-VerboseMode : true
+VerboseMode : false
 # Canvas 公告 配置
 AnouncementConfig : 
   # 是否将 Canvas 公告同步到 Todo
