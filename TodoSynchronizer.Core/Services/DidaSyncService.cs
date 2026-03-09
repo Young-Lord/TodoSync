@@ -75,10 +75,18 @@ namespace TodoSynchronizer.Core.Services
                 batchCheckDto = DidaService.BatchCheck();
                 if (batchCheckDto.ProjectProfiles == null || batchCheckDto.ProjectProfiles.Count == 0)
                     throw new Exception("清单 ProjectProfiles 为空");
+                var resolvedLists = new Dictionary<string, DidaTaskList>();
 
                 void FindList(string cat, string name)
                 {
-                    var taskList = batchCheckDto.ProjectProfiles.Find(x => x.Name.CleanEmoji() == name);
+                    var keyName = name;
+                    if (resolvedLists.TryGetValue(keyName, out var resolvedTaskList))
+                    {
+                        dicCategory.Add(cat, resolvedTaskList);
+                        return;
+                    }
+
+                    var taskList = batchCheckDto.ProjectProfiles.Find(x => x.Name == name);
 
                     if (taskList == null)
                         taskList = DidaService.AddTaskList(name);
@@ -87,6 +95,7 @@ namespace TodoSynchronizer.Core.Services
                         throw new Exception("创建滴答清单失败");
                     else
                         Message = $"找到滴答清单：{taskList.Name}";
+                    resolvedLists[keyName] = taskList;
                     dicCategory.Add(cat, taskList);
                 }
 
@@ -128,9 +137,9 @@ namespace TodoSynchronizer.Core.Services
                         if (lists.Contains(task.ProjectId))
                             yield return task;
 
-                    foreach (var item in dicCategory)
+                    foreach (var listId in lists)
                     {
-                        tmplist = DidaService.GetCompleted(item.Value.Id);
+                        tmplist = DidaService.GetCompleted(listId);
                         foreach (var task in tmplist)
                             yield return task;
                     }
