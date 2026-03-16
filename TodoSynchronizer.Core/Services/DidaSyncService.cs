@@ -12,6 +12,7 @@ using TodoSynchronizer.Core.Config;
 using TodoSynchronizer.Core.Extensions;
 using TodoSynchronizer.Core.Helpers;
 using TodoSynchronizer.Core.Models;
+using TodoSynchronizer.Core.Models.AcmOjModels;
 using TodoSynchronizer.Core.Models.CanvasModels;
 using TodoSynchronizer.Core.Models.DidaModels;
 
@@ -101,6 +102,9 @@ namespace TodoSynchronizer.Core.Services
                 if (SyncConfig.Default.NotificationConfig.Enabled)
                     FindList("notification", CanvasStringTemplateHelper.GetNotificationListName());
 
+                if (SyncConfig.Default.AcmOjAssignmentConfig != null && SyncConfig.Default.AcmOjAssignmentConfig.Enabled)
+                    FindList("acmoj", SyncConfig.Default.AcmOjListName);
+
                 //滴答清单只支持 Category
                 if (true || SyncConfig.Default.ListNameMode == ListNameMode.Category)
                 {
@@ -188,10 +192,10 @@ namespace TodoSynchronizer.Core.Services
             #region Main
             try
             {
-                if (true || SyncConfig.Default.ListNameMode == ListNameMode.Category)
-                {
-                    foreach (var course in courses)
+                    if (true || SyncConfig.Default.ListNameMode == ListNameMode.Category)
                     {
+                        foreach (var course in courses)
+                        {
                         CourseCount++;
                         if (SyncConfig.Default.AssignmentConfig.Enabled)
                             ProcessAssignments(GetCourseMessage(course), course, dicCategory["assignment"]);
@@ -202,6 +206,9 @@ namespace TodoSynchronizer.Core.Services
                         if (SyncConfig.Default.DiscussionConfig.Enabled)
                             ProcessDiscussions(GetCourseMessage(course), course, dicCategory["discussion"]);
                     }
+
+                    if (SyncConfig.Default.AcmOjAssignmentConfig != null && SyncConfig.Default.AcmOjAssignmentConfig.Enabled)
+                        ProcessAcmOjAssignments(dicCategory["acmoj"]);
                 }
             }
             catch (Exception ex)
@@ -352,6 +359,93 @@ namespace TodoSynchronizer.Core.Services
                     //    }
                     //}
                         
+                    if (updated)
+                        UpdateCount++;
+                }
+            }
+            catch (Exception ex)
+            {
+                OnReportProgress.Invoke(new SyncState(SyncStateEnum.Error, ex.ToString()));
+                return;
+            }
+        }
+        #endregion
+
+        #region AcmOjAssignments
+        private void ProcessAcmOjAssignments(DidaTaskList taskList)
+        {
+            Message = "处理 ACMOJ 作业";
+            try
+            {
+                if (!AcmOjService.IsLogin)
+                    return;
+                var problemsets = AcmOjService.ListProblemsets();
+                if (problemsets == null || problemsets.Count == 0)
+                    return;
+
+                foreach (var problemset in problemsets)
+                {
+                    if (!string.Equals(problemset.Type, "homework", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (SyncConfig.Default.IgnoreTooOldItems)
+                    {
+                        var due = AcmOjPreference.GetDueTime(problemset) ?? problemset.EndTime;
+                        if (due.HasValue && due.Value.ToUniversalTime() < DateTime.Now.AddDays(-14).ToUniversalTime())
+                            continue;
+                    }
+
+                    var updated = false;
+                    ItemCount++;
+                    Message = "处理 ACMOJ 作业 " + GetAcmOjItemMessage(problemset);
+
+                    var url = BuildAcmOjUrl(problemset);
+                    if (SyncConfig.Default.VerboseMode)
+                        OnReportProgress.Invoke(new SyncState(SyncStateEnum.Progress, $"ACMOJ URL: {url ?? "(null)"}"));
+                    DidaTask didaTask = null;
+                    if (!string.IsNullOrWhiteSpace(url) && dicUrl.ContainsKey(url))
+                        didaTask = dicUrl[url];
+                    else
+                        didaTask = new DidaTask()
+                        {
+                            Id = Common.GetRandomString(24, true, false, false, false, "abcdef"),
+                            ProjectId = taskList.Id,
+                        };
+                    var isnew = didaTask.Creator is null;
+
+                    var res1 = UpdateAcmOjItem(problemset, didaTask, SyncConfig.Default.AcmOjAssignmentConfig);
+                    var stepsUpdated = false;
+                    if (problemset.Problems != null && problemset.Problems.Count > 0)
+                        stepsUpdated = EnsureAcmOjSteps(didaTask, problemset);
+                    if (res1)
+                    {
+                        if (didaTask.Creator is null)
+                        {
+                            DidaService.AddTask(didaTask);
+                            if (!string.IsNullOrWhiteSpace(url))
+                            {
+                                DidaService.AddTaskComment(taskList.Id.ToString(), didaTask.Id.ToString(), url);
+                                if (!dicUrl.ContainsKey(url))
+                                    dicUrl.Add(url, didaTask);
+                                if (SyncConfig.Default.VerboseMode)
+                                    OnReportProgress.Invoke(new SyncState(SyncStateEnum.Progress, $"ACMOJ 已创建任务并绑定链接：{url}"));
+                            }
+                            else if (SyncConfig.Default.VerboseMode)
+                            {
+                                OnReportProgress.Invoke(new SyncState(SyncStateEnum.Progress, "ACMOJ 链接为空，未绑定 Comment"));
+                            }
+                        }
+                        else
+                        {
+                            DidaService.UpdateTask(didaTask);
+                        }
+                        updated = true;
+                    }
+                    else if (stepsUpdated)
+                    {
+                        DidaService.UpdateTask(didaTask);
+                        updated = true;
+                    }
+
                     if (updated)
                         UpdateCount++;
                 }
@@ -825,6 +919,78 @@ namespace TodoSynchronizer.Core.Services
             return modified;
         }
 
+        public bool UpdateAcmOjItem(AcmOjProblemset problemset, DidaTask didaTask, AcmOjAssignmentConfig config)
+        {
+            var modified = false;
+
+            if (didaTask == null || didaTask != null && config.UpdateTitle)
+            {
+                var title = AcmOjStringTemplateHelper.GetTitle(problemset);
+                if (didaTask == null || didaTask.Title == null || title.Trim() != didaTask.Title.Trim())
+                {
+                    didaTask.Title = title;
+                    modified = true;
+                }
+            }
+
+            if (didaTask == null && config.CreateContent || didaTask != null && config.UpdateContent)
+            {
+                var content = AcmOjStringTemplateHelper.GetContent(problemset);
+                if (didaTask == null || didaTask.Desc == null || content.Trim() != didaTask.Desc.Trim())
+                {
+                    didaTask.Desc = content;
+                    modified = true;
+                }
+            }
+
+            if (didaTask == null && config.CreateDueDate || didaTask != null && config.UpdateDueDate)
+            {
+                var duetime = AcmOjPreference.GetDueTime(problemset);
+                if (duetime.HasValue)
+                {
+                    var date = duetime.Value.ToUniversalTime();
+                    if (didaTask == null || didaTask.DueDate == null || date != didaTask.DueDate)
+                    {
+                        didaTask.DueDate = didaTask.StartDate = didaTask.RepeatFirstDate = date;
+                        didaTask.TimeZone = "Asia/Shanghai";
+                        modified = true;
+                    }
+                }
+                else if (didaTask != null && didaTask.DueDate != null)
+                {
+                    didaTask.DueDate = didaTask.StartDate = null;
+                    modified = true;
+                }
+            }
+
+            if (didaTask == null && config.CreateRemind || didaTask != null && config.UpdateRemind)
+            {
+                var remindBefore = AcmOjPreference.GetRemindBefore(config);
+                if (remindBefore > 0 && didaTask.RepeatFirstDate != null)
+                {
+                    var trigger = CanvasStringTemplateHelper.GetTrigger(remindBefore);
+                    if (didaTask == null || didaTask.Reminders == null || didaTask.Reminders.Count == 0 || didaTask.Reminders[0].Trigger != trigger)
+                    {
+                        didaTask.Reminders = new List<Reminder>();
+                        didaTask.Reminders.Add(new Reminder() { Id = Common.GetRandomString(24, true, false, false, false, "abcdef"), Trigger = trigger });
+                        modified = true;
+                    }
+                }
+            }
+
+            if (didaTask == null && config.CreateImportance || didaTask != null && config.UpdateImportance)
+            {
+                var importance = config.SetImportance;
+                if (didaTask == null || didaTask.Priority != (importance ? 5 : 0))
+                {
+                    didaTask.Priority = (importance ? 5 : 0);
+                    modified = true;
+                }
+            }
+
+            return modified;
+        }
+
 
         private string GetCourseMessage(Course course)
         {
@@ -834,6 +1000,43 @@ namespace TodoSynchronizer.Core.Services
         private string GetItemMessage(ICanvasItem item)
         {
             return $"{item.GetItemName()} {(SyncConfig.Default.VerboseMode ? item.Title : ItemCount)} ";
+        }
+
+        private string GetAcmOjItemMessage(AcmOjProblemset problemset)
+        {
+            return $"{(SyncConfig.Default.VerboseMode ? problemset.Name : ItemCount)} ";
+        }
+
+        private static string BuildAcmOjUrl(AcmOjProblemset problemset)
+        {
+            var raw = problemset.HtmlUrl ?? string.Empty;
+            return $"https://acm.sjtu.edu.cn{raw}";
+        }
+
+        private static bool EnsureAcmOjSteps(DidaTask didaTask, AcmOjProblemset problemset)
+        {
+            var modified = false;
+            if (didaTask.Items == null)
+                didaTask.Items = new List<DidaCheckItem>();
+
+            foreach (var problem in problemset.Problems)
+            {
+                var title = AcmOjStringTemplateHelper.GetProblemStepTitle(problem);
+                if (string.IsNullOrWhiteSpace(title))
+                    continue;
+                var target = didaTask.Items.FirstOrDefault(x => x.Title == title);
+                if (target == null)
+                {
+                    didaTask.Items.Add(new DidaCheckItem()
+                    {
+                        Id = Common.GetRandomString(24, true, false, false, false, "abcdef"),
+                        Title = title,
+                        Status = 0
+                    });
+                    modified = true;
+                }
+            }
+            return modified;
         }
 
 

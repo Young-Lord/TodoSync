@@ -37,76 +37,84 @@
 
 ![](https://s2.loli.net/2022/08/21/kULpJbrxvgEGzCQ.png)
 
-### 二、配置 Graph Token（若要同步到 Microsoft Todo）
+### 二、配置 ACMOJ 令牌（若要同步 ACMOJ 作业）
+
+10. 在 [API 设置 · ACMOJ](https://acm.sjtu.edu.cn/OnlineJudge/settings/api) 创建个人访问令牌，“授权范围”仅选择`problemset:read`
+
+11. 在**自己 fork 的仓库**，进入“Settings”
+
+12. 选择“Secrets - Actions”，点击“New repository secret”，Name 填 “ACMOJ_TOKEN”，Value 填刚才获取的令牌
+
+### 三、配置 Graph Token（若要同步到 Microsoft Todo）
 
 下面以 Windows 系统为例，借助“Graph 认证辅助工具”（在本仓库开源）进行配置。如有其它需求，可参考[手动配置 Graph Token](./graph-token-manually.md)
 
-10.  在 [Releases](../../../releases) 页面下载“TodoSynchronizer.QuickTool.exe”，打开。
+13.  在 [Releases](../../../releases) 页面下载“TodoSynchronizer.QuickTool.exe”，打开。
 
-11.  点击“获取 Graph 认证”，跳转到浏览器
+14.  点击“获取 Graph 认证”，跳转到浏览器
 
-12.  授权 MyTodoApp（务必核对权限是否与图中一致）
+15.  授权 MyTodoApp（务必核对权限是否与图中一致）
 
 ![](https://s2.loli.net/2022/08/21/JiYnCMUPshc5RGd.png)
 
-13. 完成后，回到程序，输入密钥以保护用户凭证
+16. 完成后，回到程序，输入密钥以保护用户凭证
 
 ![](https://s2.loli.net/2022/09/15/FH8TxICgpovdhs7.png)
 ![](https://s2.loli.net/2022/09/14/Em9aWxLCMkZf23H.png)
 
-1.  在自己 fork 的仓库，切换到 graphtoken 分支
+17.  在自己 fork 的仓库，切换到 graphtoken 分支
 
 ![](https://s2.loli.net/2022/08/21/NzJRe4E5LSlYVGb.png)
 
-15. 编辑 graphtoken.asc 文件
+18. 编辑 graphtoken.asc 文件
 
 ![](https://s2.loli.net/2022/09/14/6DLgz7mHQdVSnZ2.png)
 
-16. 粘贴刚才复制的内容（把原先的**覆盖**掉，注意不要有多余的换行），直接提交
+19. 粘贴刚才复制的内容（把原先的**覆盖**掉，注意不要有多余的换行），直接提交
 
 ![](https://s2.loli.net/2022/08/21/fdGqptNy4FZc9Vz.png)
 
-17. 再次到“Secrets”里，创建一个新条目，“Name”为“KEY”，“Value”为刚才输入的密钥
+20. 再次到“Secrets”里，创建一个新条目，“Name”为“KEY”，“Value”为刚才输入的密钥
 
 ![](https://s2.loli.net/2022/09/14/4akGQOzVLH7nYvC.png)
 
-### 三、配置滴答清单登录信息（若要同步到 滴答清单）
-18. 在**自己 fork 的仓库**，进入“Settings”
+### 四、配置滴答清单登录信息（若要同步到 滴答清单）
+21. 在**自己 fork 的仓库**，进入“Settings”
 
 ![](https://s2.loli.net/2022/08/21/BuWYEbml4QsVUXq.png)
 
-19. 选择“Secrets - Actions”，点击“New repository secret”
+22. 选择“Secrets - Actions”，点击“New repository secret”
 
 ![](https://s2.loli.net/2022/08/21/FavMKjp4lGYIh6g.png)
 
-20. “Name”为“DIDA_CREDENTIAL”，“Value”按照下面的格式填写
+23. “Name”为“DIDA_CREDENTIAL”，“Value”按照下面的格式填写
 ```
 {"phone":"你的手机号","password":"你的密码"}
 ```
 
 ![](https://s2.loli.net/2022/10/20/xpQGq6kPLMfOcX9.png)
 
-21. 添加滴答清单登录信息完成
+24. 添加滴答清单登录信息完成
 
 ![](https://s2.loli.net/2022/10/20/rNOifXCEohvn2VH.png)
 
 
-### 三、启动定时任务
+### 五、启动定时任务
 
-22. 点击“Actions”选项卡，点击按钮启用
+25. 点击“Actions”选项卡，点击按钮启用
 
 ![](https://s2.loli.net/2022/08/21/qtCnKdpPWRFNbgM.png)
 
-23. 左侧选择合适的项目，右侧点击“Run workflow”
+26. 左侧选择合适的项目，右侧点击“Run workflow”
 
 ![](https://s2.loli.net/2022/10/20/1D8hUHvlxX9qVI2.png)
 ![](https://s2.loli.net/2022/08/21/2kcXUByTOaoLIiv.png)
 
-24. 刷新，可进入 Action 查看详情。Run 步骤下面的内容为程序的执行输出
+27. 刷新，可进入 Action 查看详情。Run 步骤下面的内容为程序的执行输出
 
 ![](https://s2.loli.net/2022/08/21/kmUFi2YlMH1xbuK.png)
 
-25. 编辑仓库根目录下的 `config.yaml` 文件，可以调整同步程序设置
+28. 编辑仓库根目录下的 `config.yaml` 文件，可以调整同步程序设置
 
 ![](https://s2.loli.net/2022/08/22/mcK5afDhRXSUCVM.png)
 

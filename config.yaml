@@ -15,6 +15,8 @@ ListNameMode : Category
 ListNameTemplateForCourse : "Canvas - {course.name}"
 # Canvas 全局通知的 Todo 列表名称
 ListNameForNotification : "Canvas"
+# ACMOJ 作业的 Todo 列表名称
+AcmOjListName : "Canvas"
 # 若 ListNameMode 为 Category，则可指定创建 Todo 列表的名称
 ListNamesForCategory : 
   QuizListName : "Canvas"
@@ -251,6 +253,49 @@ NotificationConfig :
   DueDateMode : start_at
   # （此选项对滴答清单无效）
   RemindAfter : 00:05:00.00
+
+# ACMOJ 作业 配置
+AcmOjAssignmentConfig : 
+  # 是否将 ACMOJ 作业同步到 Todo
+  Enabled : true
+  # 若 Todo 列表内无当前的作业，
+  # 则在创建的新待办事项的备注中包含作业说明、时间、题目列表
+  CreateContent : true
+  # 若 Todo 列表内无当前的作业，
+  # 则把创建的新待办事项的过期时间设置为 DueDateMode 指定的值
+  CreateDueDate : true
+  # 若 Todo 列表内无当前的作业，
+  # 则把创建的新待办事项的提醒时间设置为 截止时间-BeforeTimeSpan
+  CreateRemind : true
+  CreateImportance : false
+  UpdateTitle : true
+  UpdateContent : true
+  UpdateDueDate : true
+  UpdateRemind : true
+  UpdateImportance : false
+  # 指定待办事项的标题模板
+  # 可用的替换参数：
+  # {course.name} -> 班级名称
+  # {problemset.name} -> 作业名称
+  TitleTemplate : "{problemset.name}"
+  SetImportance : false
+  # 指定待办事项过期时间的来源
+  # 可选值: end_time | late_submission_deadline
+  # end_time 表示将作业的截止时间作为待办事项的过期时间
+  # late_submission_deadline 表示将作业的迟交截止作为待办事项的过期时间
+  DueDateMode : end_time
+  # 启用待办事项过期时间 Fallback
+  # 若为 true，则 DueDateMode 的设置不再是绝对的，
+  # 当 DueDateMode 设置的来源为空，则自动切换到另一个
+  DueDateModeFallback : true
+  # 指定提前提醒的时间间隔
+  # 格式：[d.]hh:mm:ss[.fffffff]
+  # d 可选天数，不带前导零。
+  # hh 小时数，范围从“00”到“23”。
+  # mm 分钟数，范围从“00”到“59”。
+  # ss 秒数，范围从“0”到“59”。
+  # fffffff 可选毫秒数，范围从“0010000”到“9990000”。
+  BeforeTimeSpan : 1.00:00:00.00
 
 ## ------Q&A------
 ## Q: CreateXXX 和 UpdateXXX 的区别在哪里？为什么要分开？

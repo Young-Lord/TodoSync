@@ -11,6 +11,7 @@ using TodoSynchronizer.Core.Config;
 using TodoSynchronizer.Core.Extensions;
 using TodoSynchronizer.Core.Helpers;
 using TodoSynchronizer.Core.Models;
+using TodoSynchronizer.Core.Models.AcmOjModels;
 using TodoSynchronizer.Core.Models.CanvasModels;
 
 namespace TodoSynchronizer.Core.Services
@@ -72,30 +73,32 @@ namespace TodoSynchronizer.Core.Services
                 var todoTaskLists = TodoService.ListLists();
                 var resolvedLists = new Dictionary<string, TodoTaskList>();
 
-                void FindList(string cat, string name)
+                void FindList(string cat, string listName)
                 {
-                    var name = name;
-                    if (resolvedLists.TryGetValue(name, out var resolvedTaskList))
+                    if (resolvedLists.TryGetValue(listName, out var resolvedTaskList))
                     {
                         dicCategory.Add(cat, resolvedTaskList);
                         return;
                     }
 
-                    var taskList = todoTaskLists.Find(x => x.DisplayName == name);
+                    var taskList = todoTaskLists.Find(x => x.DisplayName == listName);
 
                     if (taskList == null)
-                        taskList = TodoService.AddTaskList(new TodoTaskList() { DisplayName = name });
+                        taskList = TodoService.AddTaskList(new TodoTaskList() { DisplayName = listName });
 
                     if (taskList == null)
                         throw new Exception("创建 Todo 列表失败");
                     else
                         Message = $"找到 Todo 列表：{taskList.DisplayName}";
-                    resolvedLists[name] = taskList;
+                    resolvedLists[listName] = taskList;
                     dicCategory.Add(cat, taskList);
                 }
 
                 if (SyncConfig.Default.NotificationConfig.Enabled)
                     FindList("notification", CanvasStringTemplateHelper.GetNotificationListName());
+
+                if (SyncConfig.Default.AcmOjAssignmentConfig != null && SyncConfig.Default.AcmOjAssignmentConfig.Enabled)
+                    FindList("acmoj", SyncConfig.Default.AcmOjListName);
 
                 if (SyncConfig.Default.ListNameMode == ListNameMode.Category)
                 {
@@ -140,22 +143,22 @@ namespace TodoSynchronizer.Core.Services
             {
                 IEnumerable<TodoTask> ListTodoTasksInternal()
                 {
-                    if (SyncConfig.Default.ListNameMode == ListNameMode.Category)
+                    var visitedListIds = new HashSet<string>();
+                    foreach (var item in dicCategory)
                     {
-                        var visitedListIds = new HashSet<string>();
-                        foreach(var item in dicCategory)
-                        {
-                            if (!visitedListIds.Add(item.Value.Id))
-                                continue;
-                            var tmplist = TodoService.ListTodoTasks(item.Value.Id);
-                            foreach (var task in tmplist)
-                                yield return task;
-                        }
+                        if (!visitedListIds.Add(item.Value.Id))
+                            continue;
+                        var tmplist = TodoService.ListTodoTasks(item.Value.Id);
+                        foreach (var task in tmplist)
+                            yield return task;
                     }
-                    else
+
+                    if (SyncConfig.Default.ListNameMode != ListNameMode.Category)
                     {
                         foreach (var item in dicCourse)
                         {
+                            if (!visitedListIds.Add(item.Value.Id))
+                                continue;
                             var tmplist = TodoService.ListTodoTasks(item.Value.Id);
                             foreach (var task in tmplist)
                                 yield return task;
@@ -207,10 +210,10 @@ namespace TodoSynchronizer.Core.Services
             #region Main
             try
             {
-                if (SyncConfig.Default.ListNameMode == ListNameMode.Category)
-                {
-                    foreach (var course in courses)
+                    if (SyncConfig.Default.ListNameMode == ListNameMode.Category)
                     {
+                        foreach (var course in courses)
+                        {
                             CourseCount++;
                         if (SyncConfig.Default.AssignmentConfig.Enabled)
                             ProcessAssignments(GetCourseMessage(course), course, dicCategory["assignment"]);
@@ -221,9 +224,9 @@ namespace TodoSynchronizer.Core.Services
                         if (SyncConfig.Default.DiscussionConfig.Enabled)
                             ProcessDiscussions(GetCourseMessage(course), course, dicCategory["discussion"]);
                     }
-                }
-                else//Course
-                {
+                    }
+                    else//Course
+                    {
                     foreach (var course in courses)
                     {
                         CourseCount++;
@@ -236,7 +239,11 @@ namespace TodoSynchronizer.Core.Services
                         if (SyncConfig.Default.DiscussionConfig.Enabled)
                             ProcessDiscussions(GetCourseMessage(course), course, dicCourse[course]);
                     }
+
                 }
+
+                if (SyncConfig.Default.AcmOjAssignmentConfig != null && SyncConfig.Default.AcmOjAssignmentConfig.Enabled)
+                    ProcessAcmOjAssignments(dicCategory["acmoj"]);
             }
             catch (Exception ex)
             {
@@ -432,6 +439,85 @@ namespace TodoSynchronizer.Core.Services
                 var filename = match.Groups[2].Value;
                 var filepath = match.Groups[1].Value;
                 files.Add(new Core.Models.CanvasModels.Attachment() { DisplayName = filename, Url = filepath, Locked = false });
+            }
+        }
+        #endregion
+
+        #region AcmOjAssignments
+        private void ProcessAcmOjAssignments(TodoTaskList taskList)
+        {
+            Message = "处理 ACMOJ 作业";
+            try
+            {
+                if (!AcmOjService.IsLogin)
+                    return;
+                var problemsets = AcmOjService.ListProblemsets();
+                if (problemsets == null || problemsets.Count == 0)
+                    return;
+
+                foreach (var problemset in problemsets)
+                {
+                    if (!string.Equals(problemset.Type, "homework", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (SyncConfig.Default.IgnoreTooOldItems)
+                    {
+                        var due = AcmOjPreference.GetDueTime(problemset) ?? problemset.EndTime;
+                        if (due.HasValue && due.Value.ToUniversalTime() < DateTime.Now.AddDays(-14).ToUniversalTime())
+                            continue;
+                    }
+
+                    var updated = false;
+                    ItemCount++;
+                    Message = "处理 ACMOJ 作业 " + GetAcmOjItemMessage(problemset);
+
+                    var url = BuildAcmOjUrl(problemset);
+                    if (SyncConfig.Default.VerboseMode)
+                        OnReportProgress.Invoke(new SyncState(SyncStateEnum.Progress, $"ACMOJ URL: {url ?? "(null)"}"));
+                    TodoTask todoTask = null;
+                    if (!string.IsNullOrWhiteSpace(url) && dicUrl.ContainsKey(url))
+                        todoTask = dicUrl[url];
+
+                    TodoTask todoTaskNew = new TodoTask();
+                    var res1 = UpdateAcmOjItem(problemset, todoTask, todoTaskNew, SyncConfig.Default.AcmOjAssignmentConfig);
+                    if (res1)
+                    {
+                        if (todoTask is null)
+                        {
+                            todoTask = TodoService.AddTask(taskList.Id.ToString(), todoTaskNew);
+                            if (!string.IsNullOrWhiteSpace(url))
+                            {
+                                TodoService.AddLinkedResource(taskList.Id.ToString(), todoTask.Id.ToString(), new LinkedResource() { DisplayName = url, WebUrl = url, ApplicationName = "ACMOJ" });
+                                if (!dicUrl.ContainsKey(url))
+                                    dicUrl.Add(url, todoTask);
+                                if (SyncConfig.Default.VerboseMode)
+                                    OnReportProgress.Invoke(new SyncState(SyncStateEnum.Progress, $"ACMOJ 已创建任务并绑定链接：{url}"));
+                            }
+                            else if (SyncConfig.Default.VerboseMode)
+                            {
+                                OnReportProgress.Invoke(new SyncState(SyncStateEnum.Progress, "ACMOJ 链接为空，未绑定 LinkedResource"));
+                            }
+                        }
+                        else
+                        {
+                            todoTask = TodoService.UpdateTask(taskList.Id.ToString(), todoTask.Id.ToString(), todoTaskNew);
+                        }
+                        updated = true;
+                    }
+
+                    if (todoTask != null && problemset.Problems != null && problemset.Problems.Count > 0)
+                    {
+                        if (EnsureAcmOjSteps(taskList.Id.ToString(), todoTask.Id.ToString(), problemset))
+                            updated = true;
+                    }
+
+                    if (updated)
+                        UpdateCount++;
+                }
+            }
+            catch (Exception ex)
+            {
+                OnReportProgress.Invoke(new SyncState(SyncStateEnum.Error, ex.ToString()));
+                return;
             }
         }
         #endregion
@@ -877,6 +963,79 @@ namespace TodoSynchronizer.Core.Services
             return modified;
         }
 
+        public bool UpdateAcmOjItem(AcmOjProblemset problemset, TodoTask todoTaskOld, TodoTask todoTaskNew, AcmOjAssignmentConfig config)
+        {
+            var modified = false;
+
+            if (todoTaskOld == null || todoTaskOld != null && config.UpdateTitle)
+            {
+                var title = AcmOjStringTemplateHelper.GetTitle(problemset);
+                if (todoTaskOld == null || todoTaskOld.Title == null || title.Trim() != todoTaskOld.Title.Trim())
+                {
+                    todoTaskNew.Title = title;
+                    modified = true;
+                }
+            }
+
+            if (todoTaskOld == null && config.CreateContent || todoTaskOld != null && config.UpdateContent)
+            {
+                var content = AcmOjStringTemplateHelper.GetContent(problemset);
+                if (todoTaskOld == null || todoTaskOld.Body.Content == null || content.Trim() != todoTaskOld.Body.Content.Trim())
+                {
+                    todoTaskNew.Body = new ItemBody() { ContentType = BodyType.Text };
+                    todoTaskNew.Body.Content = content;
+                    modified = true;
+                }
+            }
+
+            if (todoTaskOld == null && config.CreateDueDate || todoTaskOld != null && config.UpdateDueDate)
+            {
+                var duetime = AcmOjPreference.GetDueTime(problemset);
+                if (duetime.HasValue)
+                {
+                    var date = duetime.Value.ToUniversalTime().Date.ToString("yyyy-MM-ddTHH:mm:ss.fffffff", System.Globalization.CultureInfo.InvariantCulture);
+                    if (todoTaskOld == null || todoTaskOld.DueDateTime == null || date != todoTaskOld.DueDateTime.DateTime)
+                    {
+                        todoTaskNew.DueDateTime = DateTimeTimeZone.FromDateTime(duetime.Value);
+                        modified = true;
+                    }
+                }
+                else if (todoTaskOld != null && todoTaskOld.DueDateTime != null)
+                {
+                    todoTaskNew.AdditionalData = new Dictionary<string, object>();
+                    todoTaskNew.AdditionalData["dueDateTime"] = null;
+                    modified = true;
+                }
+            }
+
+            if (todoTaskOld == null && config.CreateRemind || todoTaskOld != null && config.UpdateRemind)
+            {
+                var remindtime = AcmOjPreference.GetRemindTime(problemset);
+                if (remindtime.HasValue)
+                {
+                    var date = remindtime.Value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffffff", System.Globalization.CultureInfo.InvariantCulture);
+                    if (todoTaskOld == null || todoTaskOld.IsReminderOn == false || todoTaskOld.ReminderDateTime == null || date != todoTaskOld.ReminderDateTime.DateTime)
+                    {
+                        todoTaskNew.ReminderDateTime = DateTimeTimeZone.FromDateTime(remindtime.Value);
+                        todoTaskNew.IsReminderOn = true;
+                        modified = true;
+                    }
+                }
+            }
+
+            if (todoTaskOld == null && config.CreateImportance || todoTaskOld != null && config.UpdateImportance)
+            {
+                var importance = config.SetImportance;
+                if (todoTaskOld == null || todoTaskOld.Importance.Value != (importance ? Importance.High : Importance.Normal))
+                {
+                    todoTaskNew.Importance = (importance ? Importance.High : Importance.Normal);
+                    modified = true;
+                }
+            }
+
+            return modified;
+        }
+
         private bool UploadAttachments(TodoTaskList taskList, TodoTask todoTask, List<Models.CanvasModels.Attachment> files)
         {
             var updated = false;
@@ -955,6 +1114,36 @@ namespace TodoSynchronizer.Core.Services
         private string GetItemMessage(ICanvasItem item)
         {
             return $"{item.GetItemName()} {(SyncConfig.Default.VerboseMode ? item.Title : ItemCount)} ";
+        }
+
+        private string GetAcmOjItemMessage(AcmOjProblemset problemset)
+        {
+            return $"{(SyncConfig.Default.VerboseMode ? problemset.Name : ItemCount)} ";
+        }
+
+        private static string BuildAcmOjUrl(AcmOjProblemset problemset)
+        {
+            var raw = problemset.HtmlUrl ?? string.Empty;
+            return $"https://acm.sjtu.edu.cn{raw}";
+        }
+
+        private static bool EnsureAcmOjSteps(string listId, string taskId, AcmOjProblemset problemset)
+        {
+            var modified = false;
+            var existing = TodoService.ListCheckItems(listId, taskId) ?? new List<ChecklistItem>();
+            foreach (var problem in problemset.Problems)
+            {
+                var title = AcmOjStringTemplateHelper.GetProblemStepTitle(problem);
+                if (string.IsNullOrWhiteSpace(title))
+                    continue;
+                var target = existing.FirstOrDefault(x => x.DisplayName == title);
+                if (target == null)
+                {
+                    TodoService.AddCheckItem(listId, taskId, new ChecklistItem() { DisplayName = title, IsChecked = false });
+                    modified = true;
+                }
+            }
+            return modified;
         }
 
         public static byte[] StreamToBytes(Stream stream)

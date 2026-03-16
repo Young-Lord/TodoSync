@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+#nullable enable
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,13 +26,13 @@ namespace TodoSynchronizer.Core.Models.CanvasModels
     public class Author
     {
         [JsonProperty("avatar_image_url")]
-        public string AvatarImageUrl { get; set; }
+        public string? AvatarImageUrl { get; set; }
 
         [JsonProperty("display_name")]
-        public string DisplayName { get; set; }
+        public string? DisplayName { get; set; }
 
         [JsonProperty("html_url")]
-        public string HtmlUrl { get; set; }
+        public string? HtmlUrl { get; set; }
 
         [JsonProperty("id")]
         public long? Id { get; set; }
@@ -39,23 +40,23 @@ namespace TodoSynchronizer.Core.Models.CanvasModels
 
     public class Calendar
     {
-        [JsonProperty("ics")]
-        public string Ics { get; set; }
+        [JsonProperty("ics", Required = Required.Always)]
+        public string Ics { get; set; } = null!;
     }
 
     public class Attachment
     {
-        [JsonProperty("content-type")]
-        public string ContentType { get; set; }
+        [JsonProperty("content-type", Required = Required.Always)]
+        public string ContentType { get; set; } = null!;
 
-        [JsonProperty("created_at")]
-        public string CreatedAt { get; set; }
+        [JsonProperty("created_at", Required = Required.Always)]
+        public string CreatedAt { get; set; } = null!;
 
-        [JsonProperty("display_name")]
-        public string DisplayName { get; set; }
+        [JsonProperty("display_name", Required = Required.Always)]
+        public string DisplayName { get; set; } = null!;
 
-        [JsonProperty("filename")]
-        public string Filename { get; set; }
+        [JsonProperty("filename", Required = Required.Always)]
+        public string Filename { get; set; } = null!;
 
         [JsonProperty("folder_id")]
         public long? FolderId { get; set; }
@@ -70,7 +71,7 @@ namespace TodoSynchronizer.Core.Models.CanvasModels
         public long Id { get; set; }
 
         [JsonProperty("lock_at")]
-        public object LockAt { get; set; }
+        public object? LockAt { get; set; }
 
         [JsonProperty("locked")]
         public bool Locked { get; set; }
@@ -79,30 +80,30 @@ namespace TodoSynchronizer.Core.Models.CanvasModels
         public bool LockedForUser { get; set; }
 
         [JsonProperty("media_entry_id")]
-        public object MediaEntryId { get; set; }
+        public object? MediaEntryId { get; set; }
 
-        [JsonProperty("mime_class")]
-        public string MimeClass { get; set; }
+        [JsonProperty("mime_class", Required = Required.Always)]
+        public string MimeClass { get; set; } = null!;
 
-        [JsonProperty("modified_at")]
-        public string ModifiedAt { get; set; }
+        [JsonProperty("modified_at", Required = Required.Always)]
+        public string ModifiedAt { get; set; } = null!;
 
         [JsonProperty("size")]
         public long? Size { get; set; }
 
         [JsonProperty("thumbnail_url")]
-        public object ThumbnailUrl { get; set; }
+        public object? ThumbnailUrl { get; set; }
 
         [JsonProperty("unlock_at")]
-        public object UnlockAt { get; set; }
+        public object? UnlockAt { get; set; }
 
-        [JsonProperty("updated_at")]
-        public string UpdatedAt { get; set; }
+        [JsonProperty("updated_at", Required = Required.Always)]
+        public string UpdatedAt { get; set; } = null!;
 
-        [JsonProperty("url")]
-        public string Url { get; set; }
+        [JsonProperty("url", Required = Required.Always)]
+        public string Url { get; set; } = null!;
 
-        [JsonProperty("uuid")]
-        public string Uuid { get; set; }
+        [JsonProperty("uuid", Required = Required.Always)]
+        public string Uuid { get; set; } = null!;
     }
 }

@@ -23,4 +23,4 @@ jobs:
     - name: Write Dida Credential
       run: echo '${{ secrets.DIDA_CREDENTIAL }}' > dida.json
     - name: Run
-      run: ./TodoSynchronizer.CLI/bin/Release/net6.0/TodoSynchronizer.CLI -canvastoken ${{ secrets.CANVAS_TOKEN }} -configfile config.yaml -didacredentialfile dida.json
+      run: ./TodoSynchronizer.CLI/bin/Release/net6.0/TodoSynchronizer.CLI -canvastoken ${{ secrets.CANVAS_TOKEN }} -acmojtoken ${{ secrets.ACMOJ_TOKEN }} -configfile config.yaml -didacredentialfile dida.json

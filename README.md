@@ -1,7 +1,7 @@
 ![](https://s2.loli.net/2022/10/20/2greaNyO7PdvcUh.png)
 
 ## 程序简介
-基于 GitHub Actions 的定时任务（每小时运行一次同步），将 Canvas LMS 的作业、测验、公告、讨论同步到 Microsoft Todo/滴答清单（目前仅适配上海交通大学 Canvas 系统，理论上所有 Canvas LMS 都能用）
+基于 GitHub Actions 的定时任务（每小时运行一次同步），将 Canvas LMS 的作业、测验、公告、讨论，以及 ACMOJ 作业同步到 Microsoft Todo/滴答清单（目前仅适配上海交通大学 Canvas 系统，理论上所有 Canvas LMS 都能用）
 
 ![](https://s2.loli.net/2022/09/14/J8WMPXCvjw34ZOq.png)
 ![](https://s2.loli.net/2022/10/20/oZjiM92OQtJH1pW.png)

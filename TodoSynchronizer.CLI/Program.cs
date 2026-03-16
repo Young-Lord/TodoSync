@@ -14,7 +14,7 @@ class Program
     static ISimpleLogger logger;
     static void Main(string[] args)
     {
-        string canvastoken = "", graphtokenpath = "", didacredentialfile = "";
+        string canvastoken = "", acmojtoken = "", graphtokenpath = "", didacredentialfile = "";
         string configpath = "", graphtokenkey = "", offlinetokenfile = "";
         bool local = false;
         OfflineTokenDto offlineToken = null;
@@ -25,6 +25,9 @@ class Program
             if (args[i] == "-canvastoken")
                 if (i + 1 < args.Length)
                     canvastoken = args[i + 1].Trim();
+            if (args[i] == "-acmojtoken")
+                if (i + 1 < args.Length)
+                    acmojtoken = args[i + 1].Trim();
             if (args[i] == "-graphtokenfile")
                 if (i + 1 < args.Length)
                     graphtokenpath = args[i + 1].Trim();
@@ -83,12 +86,14 @@ class Program
             offlinetokenfile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"token.json");
             offlineToken = JsonConvert.DeserializeObject<OfflineTokenDto>(File.ReadAllText(offlinetokenfile));
             canvastoken = offlineToken.CanvasToken;
+            acmojtoken = offlineToken.AcmOjToken;
             didaCredential = offlineToken.DidaCredential;
         }
 
         ReadConfig(configpath);
 
         CanvasLogin(canvastoken);
+        AcmOjLogin(acmojtoken);
 
         if (didacredentialfile == "")
         {
@@ -235,6 +240,31 @@ class Program
             Environment.Exit(-1);
         }
         Log("Graph 认证成功");
+    }
+
+    private static void AcmOjLogin(string acmojtoken)
+    {
+        if (string.IsNullOrWhiteSpace(acmojtoken))
+        {
+            Log("未配置 ACMOJ Token，跳过 ACMOJ 同步");
+            return;
+        }
+        try
+        {
+            var res1 = AcmOjService.Login(acmojtoken);
+            if (!res1.success)
+            {
+                Log("ACMOJ 认证失败！");
+                Log(res1.result);
+                return;
+            }
+            Log("ACMOJ 认证成功");
+        }
+        catch (Exception ex)
+        {
+            Log("ACMOJ 认证失败！");
+            Log(ex.ToString());
+        }
     }
 
     private static void OnReportProgress(SyncState state)

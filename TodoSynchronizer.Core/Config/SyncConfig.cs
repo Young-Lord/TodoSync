@@ -16,6 +16,7 @@ namespace TodoSynchronizer.Core.Config
         public ListNamesForCategory ListNamesForCategory { get; set; }
         public string ListNameTemplateForCourse { get; set; }
         public string ListNameForNotification { get; set; }
+        public string AcmOjListName { get; set; }
 
         //Global Config
         public bool IgnoreTooOldItems { get; set; }
@@ -36,6 +37,9 @@ namespace TodoSynchronizer.Core.Config
 
         //Notification
         public NotificationConfig NotificationConfig { get; set; }
+
+        //ACMOJ
+        public AcmOjAssignmentConfig AcmOjAssignmentConfig { get; set; }
     }
 
     public class ListNamesForCategory
@@ -171,6 +175,32 @@ namespace TodoSynchronizer.Core.Config
         public bool SetImportance { get; set; }
         public DueDateMode DueDateMode { get; set; }
         public TimeSpan RemindAfter { get; set; }
+    }
+
+    public class AcmOjAssignmentConfig
+    {
+        public bool Enabled { get; set; }
+        public bool CreateContent { get; set; }
+        public bool CreateDueDate { get; set; }
+        public bool CreateRemind { get; set; }
+        public bool CreateImportance { get; set; }
+
+        public bool UpdateTitle { get; set; }
+        public bool UpdateContent { get; set; }
+        public bool UpdateDueDate { get; set; }
+        public bool UpdateRemind { get; set; }
+        public bool UpdateImportance { get; set; }
+
+        public string TitleTemplate { get; set; }
+        public bool SetImportance { get; set; }
+        public AcmOjDueDateMode DueDateMode { get; set; }
+        public bool DueDateModeFallback { get; set; }
+        public TimeSpan BeforeTimeSpan { get; set; }
+    }
+
+    public enum AcmOjDueDateMode
+    {
+        end_time, late_submission_deadline
     }
 
     public interface ICanvasItemConfig

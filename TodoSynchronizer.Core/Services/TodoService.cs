@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using TodoSynchronizer.Core.Helpers;
 using TodoSynchronizer.Core.Service;
 
@@ -18,9 +19,10 @@ namespace TodoSynchronizer.Core.Services
             set
             {
                 token = value;
-                var authProvider = new DelegateAuthenticationProvider(async (request) => {
+                var authProvider = new DelegateAuthenticationProvider((request) => {
                     request.Headers.Authorization =
                         new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", Token);
+                    return Task.CompletedTask;
                 });
 
                 client = new GraphServiceClient("https://graph.microsoft.com/beta", authProvider);
