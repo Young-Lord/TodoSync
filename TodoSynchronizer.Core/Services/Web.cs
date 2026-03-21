@@ -5,6 +5,8 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using TodoSynchronizer.Core.Extensions;
 using TodoSynchronizer.Core.Models;
 
@@ -20,24 +22,50 @@ namespace TodoSynchronizer.Core.Service
         public static WebResult Get(HttpClient client, string url, Dictionary<string, string> queryparas, Dictionary<string, string> headers)
         {
             ProcessHeaders(client, headers);
-            var task = client.GetAsync(url);
-            task.Wait();
-            return GetFinalResult(task.GetAwaiter().GetResult());
+            return ExecuteRequest(() => client.GetAsync(url).GetAwaiter().GetResult(), "GET", url);
         }
 
         public static WebResult Get(HttpClient client, string url)
         {
-            var task = client.GetAsync(url);
-            task.Wait();
-            return GetFinalResult(task.GetAwaiter().GetResult());
+            return ExecuteRequest(() => client.GetAsync(url).GetAwaiter().GetResult(), "GET", url);
         }
         public static WebResult Post(HttpClient client, string url, string content)
         {
             var httpcontent = new StringContent(content);
             httpcontent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-            var task = client.PostAsync(url, httpcontent);
-            task.Wait();
-            return GetFinalResult(task.GetAwaiter().GetResult());
+            return ExecuteRequest(() => client.PostAsync(url, httpcontent).GetAwaiter().GetResult(), "POST", url);
+        }
+
+        private static WebResult ExecuteRequest(Func<HttpResponseMessage> requestFunc, string method, string url)
+        {
+            const int maxAttempts = 3;
+
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                try
+                {
+                    var responseMessage = requestFunc();
+                    return GetFinalResult(responseMessage);
+                }
+                catch (TaskCanceledException ex)
+                {
+                    if (attempt == maxAttempts)
+                        return new WebResult(null, false, null, $"{method} 请求超时：{url}，{ex.Message}");
+                }
+                catch (HttpRequestException ex)
+                {
+                    if (attempt == maxAttempts)
+                        return new WebResult(null, false, null, $"{method} 请求失败：{url}，{ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    return new WebResult(null, false, null, $"{method} 请求异常：{url}，{ex.Message}");
+                }
+
+                Thread.Sleep(300 * attempt);
+            }
+
+            return new WebResult(null, false, null, $"{method} 请求失败：{url}");
         }
 
         public static void ProcessHeaders(HttpClient client, Dictionary<string, string> headers)
