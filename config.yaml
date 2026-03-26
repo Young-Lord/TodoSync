@@ -106,7 +106,7 @@ AssignmentConfig :
   CreateRemind : false
   # 若 Todo 列表内无当前的作业，
   # 则在创建的新待办事项的步骤里添加提交和分数信息
-  CreateScoreAndCommit : true
+  CreateScoreAndCommit : false
   CreateAttachments : true
   CreateImportance : false
   # 同步助教和老师的评论
@@ -118,7 +118,7 @@ AssignmentConfig :
   # 若 Todo 列表内已存在当前的公告，
   # 且已存在待办事项的提交和分数信息与最新的不一致，
   # 则更新已存在待办事项的提交和分数信息
-  UpdateScoreAndCommit : true
+  UpdateScoreAndCommit : false
   UpdateImportance : false
   UpdateComments : true
   # 指定待办事项的标题模板
@@ -169,14 +169,14 @@ QuizConfig :
   CreateRemind : false
   # 若 Todo 列表内无当前的测验，
   # 则在创建的新待办事项的步骤里添加提交和分数信息
-  CreateScoreAndCommit : true
+  CreateScoreAndCommit : false
   CreateAttachments : true
   CreateImportance : false
   UpdateTitle : true
   UpdateContent : true
   UpdateDueDate : true
   UpdateRemind : false
-  UpdateScoreAndCommit : true
+  UpdateScoreAndCommit : false
   UpdateImportance : false
   # 指定待办事项的标题模板
   # 可用的替换参数：
