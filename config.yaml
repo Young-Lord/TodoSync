@@ -49,7 +49,7 @@ AnouncementConfig :
   CreateAttachments : true
   # 若 Todo 列表内无当前的公告，
   # 则把创建的新待办事项的提醒时间设置为 当前时间+RemindAfter
-  CreateRemind : true
+  CreateRemind : false
   # 若 Todo 列表内无当前的公告，
   # 则把创建的新待办事项的重要性设置为 SetImportance 指定的值
   CreateImportance : false
@@ -103,7 +103,7 @@ AssignmentConfig :
   CreateDueDate : true
   # 若 Todo 列表内无当前的作业，
   # 则把创建的新待办事项的提醒时间设置为 RemindMode 指定的值
-  CreateRemind : true
+  CreateRemind : false
   # 若 Todo 列表内无当前的作业，
   # 则在创建的新待办事项的步骤里添加提交和分数信息
   CreateScoreAndCommit : true
@@ -114,7 +114,7 @@ AssignmentConfig :
   UpdateTitle : true
   UpdateContent : true
   UpdateDueDate : true
-  UpdateRemind : true
+  UpdateRemind : false
   # 若 Todo 列表内已存在当前的公告，
   # 且已存在待办事项的提交和分数信息与最新的不一致，
   # 则更新已存在待办事项的提交和分数信息
@@ -166,7 +166,7 @@ QuizConfig :
   CreateDueDate : true
   # 若 Todo 列表内无当前的测验，
   # 则把创建的新待办事项的提醒时间设置为 RemindMode 指定的值
-  CreateRemind : true
+  CreateRemind : false
   # 若 Todo 列表内无当前的测验，
   # 则在创建的新待办事项的步骤里添加提交和分数信息
   CreateScoreAndCommit : true
@@ -175,7 +175,7 @@ QuizConfig :
   UpdateTitle : true
   UpdateContent : true
   UpdateDueDate : true
-  UpdateRemind : true
+  UpdateRemind : false
   UpdateScoreAndCommit : true
   UpdateImportance : false
   # 指定待办事项的标题模板
@@ -204,7 +204,7 @@ DiscussionConfig :
   CreateDueDate : true
   # 若 Todo 列表内无当前的讨论，
   # 则把创建的新待办事项的提醒时间设置为 当前时间+RemindAfter
-  CreateRemind : true
+  CreateRemind : false
   CreateAttachments : true
   CreateImportance : false
   UpdateTitle : true
@@ -235,7 +235,7 @@ NotificationConfig :
   Enabled : true
   CreateContent : true
   CreateDueDate : true
-  CreateRemind : true
+  CreateRemind : false
   CreateImportance : false
   UpdateTitle : false
   UpdateContent : false
@@ -266,12 +266,12 @@ AcmOjAssignmentConfig :
   CreateDueDate : true
   # 若 Todo 列表内无当前的作业，
   # 则把创建的新待办事项的提醒时间设置为 截止时间-BeforeTimeSpan
-  CreateRemind : true
+  CreateRemind : false
   CreateImportance : false
   UpdateTitle : true
   UpdateContent : true
   UpdateDueDate : true
-  UpdateRemind : true
+  UpdateRemind : false
   UpdateImportance : false
   # 指定待办事项的标题模板
   # 可用的替换参数：
