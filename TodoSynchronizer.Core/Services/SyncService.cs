@@ -436,6 +436,10 @@ namespace TodoSynchronizer.Core.Services
             }
             foreach (Match match in img_matches)
             {
+                // Equation images are rendered as inline LaTeX in the task body, so
+                // uploading the formula PNGs as attachments would only be noise.
+                if (match.Value.IndexOf("equation_image", StringComparison.OrdinalIgnoreCase) >= 0)
+                    continue;
                 var filename = match.Groups[2].Value;
                 var filepath = match.Groups[1].Value;
                 files.Add(new Core.Models.CanvasModels.Attachment() { DisplayName = filename, Url = filepath, Locked = false });

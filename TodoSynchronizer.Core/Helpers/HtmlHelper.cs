@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
+using HtmlAgilityPack;
 
 namespace TodoSynchronizer.Core.Helpers
 {
@@ -13,6 +14,17 @@ namespace TodoSynchronizer.Core.Helpers
         // Static data tables
         protected static Dictionary<string, string> _tags;
         protected static HashSet<string> _ignoreTags;
+        // Placeholder that survives tag stripping and entity decoding, with the
+        // equation's final text held aside until the very end of Convert.
+        private const char EquationPlaceholderStart = '\uE000';
+        private const char EquationPlaceholderEnd = '\uE001';
+        // Inline math delimiter, written via escape so the source stays unambiguous.
+        private const string InlineMathDelimiter = "\u0024";
+        // Unicode block tables from the BCL: a character is "Chinese" when it falls in
+        // the CJK Unified Ideographs block or its Extension A block.
+        private static readonly Regex ChineseCharacterRegex = new Regex(
+            @"[\p{IsCJKUnifiedIdeographs}\p{IsCJKUnifiedIdeographsExtensionA}]",
+            RegexOptions.Compiled);
         // Instance variables
         protected TextBuilder _text;
         protected string _html;
@@ -70,6 +82,10 @@ namespace TodoSynchronizer.Core.Helpers
             //Hack <a>
             var reg = new Regex(@"<a.*?href=""(.+?)"".+?>(.*?)</a>");
             html = reg.Replace(html, x => $"[{x.Groups[2].Value}]({x.Groups[1].Value})");
+            // Replace Canvas equation images with placeholders before tag stripping,
+            // so the LaTeX is neither discarded nor reprocessed as HTML.
+            var equationTexts = new List<string>();
+            html = ReplaceEquationImages(html, equationTexts);
             // Initialize state variables
             _text = new TextBuilder();
             _html = html;
@@ -124,7 +140,81 @@ namespace TodoSynchronizer.Core.Helpers
                 }
             }
             // Return result
-            return HttpUtility.HtmlDecode(_text.ToString());
+            var plainText = HttpUtility.HtmlDecode(_text.ToString());
+            return ExpandEquationPlaceholders(plainText, equationTexts);
+        }
+        // Restores the LaTeX text captured before tag stripping. The replacement is
+        // done last so the LaTeX is never decoded or whitespace-collapsed as HTML.
+        // A space is added only where the equation touches a Chinese character, which
+        // keeps "推广到$n$个事件" readable without padding full-width punctuation.
+        private static string ExpandEquationPlaceholders(string text, List<string> equationTexts)
+        {
+            if (equationTexts.Count == 0)
+                return text;
+            var pattern = EquationPlaceholderStart + @"(\d+)" + EquationPlaceholderEnd;
+            return Regex.Replace(text, pattern, match =>
+            {
+                var equation = equationTexts[int.Parse(match.Groups[1].Value)];
+                var precedingChar = match.Index > 0 ? text[match.Index - 1] : '\0';
+                var followingIndex = match.Index + match.Length;
+                var followingChar = followingIndex < text.Length ? text[followingIndex] : '\0';
+                return (IsChineseCharacter(precedingChar) ? " " : "")
+                    + equation
+                    + (IsChineseCharacter(followingChar) ? " " : "");
+            });
+        }
+        private static bool IsChineseCharacter(char c)
+        {
+            return ChineseCharacterRegex.IsMatch(c.ToString());
+        }
+        // Replaces Canvas equation images with placeholders, keeping the LaTeX aside, so
+        // the HTML-to-text pass neither discards it nor treats it as markup. The offsets
+        // are taken from the parsed document, because attribute values may contain '>' or
+        // newlines (Canvas embeds multi-line MathML in x-canvaslms-safe-mathml).
+        private static string ReplaceEquationImages(string html, List<string> equationTexts)
+        {
+            var doc = new HtmlDocument();
+            doc.LoadHtml(html);
+            var equations = new List<(int Start, int End, string Latex)>();
+            foreach (var node in doc.DocumentNode.Descendants("img"))
+            {
+                if (!IsEquationImage(node))
+                    continue;
+                var latex = GetEquationLatex(node);
+                if (string.IsNullOrEmpty(latex))
+                    continue;
+                var start = node.OuterStartIndex;
+                var end = Math.Min(start + node.OriginalOuterLength, html.Length);
+                if (start < 0 || end <= start || html[end - 1] != '>')
+                    continue;
+                equations.Add((start, end, latex));
+            }
+            if (equations.Count == 0)
+                return html;
+            var result = new StringBuilder(html);
+            // Replace back to front so the offsets of the pending equations stay valid.
+            for (var i = equations.Count - 1; i >= 0; i--)
+            {
+                var (start, end, latex) = equations[i];
+                equationTexts.Add(InlineMathDelimiter + latex + InlineMathDelimiter);
+                var placeholder = EquationPlaceholderStart + (equationTexts.Count - 1).ToString() + EquationPlaceholderEnd;
+                result.Remove(start, end - start).Insert(start, placeholder);
+            }
+            return result.ToString();
+        }
+        // True when the image element is a Canvas math equation.
+        private static bool IsEquationImage(HtmlNode node)
+        {
+            var className = node.GetAttributeValue("class", null);
+            return className != null
+                && className.Split(new[] { ' ', '\t', '\r', '\n', '\f' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Contains("equation_image");
+        }
+        // Canvas stores the raw LaTeX in data-equation-content.
+        private static string GetEquationLatex(HtmlNode node)
+        {
+            var value = HttpUtility.HtmlDecode(node.GetAttributeValue("data-equation-content", null));
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
         }
         // Eats all characters that are part of the current tag
         // and returns information about that tag
