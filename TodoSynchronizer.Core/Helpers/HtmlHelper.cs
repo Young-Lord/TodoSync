@@ -13,6 +13,22 @@ namespace TodoSynchronizer.Core.Helpers
         // Static data tables
         protected static Dictionary<string, string> _tags;
         protected static HashSet<string> _ignoreTags;
+        // Matches an <img> tag whose attribute values may contain '>' or newlines,
+        // because Canvas embeds multi-line MathML in x-canvaslms-safe-mathml.
+        private static readonly Regex ImageTagRegex = new Regex(
+            @"<img\b(?:[^>""']|""[^""]*""|'[^']*')*>",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        // Placeholder that survives tag stripping and entity decoding, with the
+        // equation's final text held aside until the very end of Convert.
+        private const char EquationPlaceholderStart = '\uE000';
+        private const char EquationPlaceholderEnd = '\uE001';
+        // Inline math delimiter, written via escape so the source stays unambiguous.
+        private const string InlineMathDelimiter = "\u0024";
+        // Unicode block tables from the BCL: a character is "Chinese" when it falls in
+        // the CJK Unified Ideographs block or its Extension A block.
+        private static readonly Regex ChineseCharacterRegex = new Regex(
+            @"[\p{IsCJKUnifiedIdeographs}\p{IsCJKUnifiedIdeographsExtensionA}]",
+            RegexOptions.Compiled);
         // Instance variables
         protected TextBuilder _text;
         protected string _html;
@@ -70,6 +86,21 @@ namespace TodoSynchronizer.Core.Helpers
             //Hack <a>
             var reg = new Regex(@"<a.*?href=""(.+?)"".+?>(.*?)</a>");
             html = reg.Replace(html, x => $"[{x.Groups[2].Value}]({x.Groups[1].Value})");
+            // Replace Canvas equation images with placeholders before tag stripping,
+            // so the LaTeX is neither discarded nor reprocessed as HTML.
+            var equationTexts = new List<string>();
+            var source = html;
+            html = ImageTagRegex.Replace(source, match =>
+            {
+                var tag = match.Value;
+                if (!IsEquationImage(tag))
+                    return tag;
+                var latex = GetEquationLatex(tag);
+                if (string.IsNullOrEmpty(latex))
+                    return tag;
+                equationTexts.Add(InlineMathDelimiter + latex + InlineMathDelimiter);
+                return EquationPlaceholderStart + (equationTexts.Count - 1).ToString() + EquationPlaceholderEnd;
+            });
             // Initialize state variables
             _text = new TextBuilder();
             _html = html;
@@ -124,7 +155,54 @@ namespace TodoSynchronizer.Core.Helpers
                 }
             }
             // Return result
-            return HttpUtility.HtmlDecode(_text.ToString());
+            var plainText = HttpUtility.HtmlDecode(_text.ToString());
+            return ExpandEquationPlaceholders(plainText, equationTexts);
+        }
+        // Restores the LaTeX text captured before tag stripping. The replacement is
+        // done last so the LaTeX is never decoded or whitespace-collapsed as HTML.
+        // A space is added only where the equation touches a Chinese character, which
+        // keeps "推广到$n$个事件" readable without padding full-width punctuation.
+        private static string ExpandEquationPlaceholders(string text, List<string> equationTexts)
+        {
+            if (equationTexts.Count == 0)
+                return text;
+            var pattern = EquationPlaceholderStart + @"(\d+)" + EquationPlaceholderEnd;
+            return Regex.Replace(text, pattern, match =>
+            {
+                var equation = equationTexts[int.Parse(match.Groups[1].Value)];
+                var precedingChar = match.Index > 0 ? text[match.Index - 1] : '\0';
+                var followingIndex = match.Index + match.Length;
+                var followingChar = followingIndex < text.Length ? text[followingIndex] : '\0';
+                return (IsChineseCharacter(precedingChar) ? " " : "")
+                    + equation
+                    + (IsChineseCharacter(followingChar) ? " " : "");
+            });
+        }
+        private static bool IsChineseCharacter(char c)
+        {
+            return ChineseCharacterRegex.IsMatch(c.ToString());
+        }
+        // True when the image tag is a Canvas math equation.
+        private static bool IsEquationImage(string imageTag)
+        {
+            var className = ExtractAttributeValue(imageTag, "class");
+            return className != null && Regex.IsMatch(className, @"(?:^|\s)equation_image(?:\s|$)");
+        }
+        // Canvas stores the raw LaTeX in data-equation-content.
+        private static string GetEquationLatex(string imageTag)
+        {
+            var value = ExtractAttributeValue(imageTag, "data-equation-content");
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        }
+        // Reads one attribute value from a tag, tolerating single or double quotes.
+        private static string ExtractAttributeValue(string tag, string attributeName)
+        {
+            var pattern = @"(?<![\w-])" + Regex.Escape(attributeName) + @"\s*=\s*(?:""([^""]*)""|'([^']*)')";
+            var match = Regex.Match(tag, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            if (!match.Success)
+                return null;
+            var value = match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value;
+            return HttpUtility.HtmlDecode(value);
         }
         // Eats all characters that are part of the current tag
         // and returns information about that tag
