@@ -18,6 +18,13 @@ jobs:
         with:
           dotnet-version: 6.0.x
 
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
       - name: Build for Windows x86/x64
         if: matrix.os == 'windows-latest'
         run: |
