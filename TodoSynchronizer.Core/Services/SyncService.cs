@@ -1,4 +1,5 @@
-﻿using Microsoft.Graph;
+﻿using HtmlAgilityPack;
+using Microsoft.Graph;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -6,7 +7,6 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Text.RegularExpressions;
 using TodoSynchronizer.Core.Config;
 using TodoSynchronizer.Core.Extensions;
 using TodoSynchronizer.Core.Helpers;
@@ -422,27 +422,26 @@ namespace TodoSynchronizer.Core.Services
             }
         }
 
-        private static void CheckAttachments(string content, List<Models.CanvasModels.Attachment> files)
+        private void CheckAttachments(string content, List<Models.CanvasModels.Attachment> files)
         {
-            var file_reg = new Regex(@"<a.+?instructure_file_link.+?title=""(.+?)"".+?href=""(.+?)"".+?</a>");
-            var file_matches = file_reg.Matches(content);
-            var img_reg = new Regex(@"<img.+?src=""(.+?)"".+?alt=""(.+?)"".+?>");
-            var img_matches = img_reg.Matches(content);
-            foreach (Match match in file_matches)
+            // data-api-endpoint / data-api-returntype 说明：https://developerdocs.instructure.com/services/canvas/basics/file.endpoint_attributes
+            var doc = new HtmlDocument();
+            doc.LoadHtml(content);
+            foreach (var node in doc.DocumentNode.Descendants())
             {
-                var filename = match.Groups[1].Value;
-                var filepath = match.Groups[2].Value;
-                files.Add(new Core.Models.CanvasModels.Attachment() { DisplayName = filename, Url = filepath, Locked = false });
-            }
-            foreach (Match match in img_matches)
-            {
-                // Equation images are rendered as inline LaTeX in the task body, so
-                // uploading the formula PNGs as attachments would only be noise.
-                if (match.Value.IndexOf("equation_image", StringComparison.OrdinalIgnoreCase) >= 0)
+                if (node.GetAttributeValue("data-api-returntype", null) != "File")
                     continue;
-                var filename = match.Groups[2].Value;
-                var filepath = match.Groups[1].Value;
-                files.Add(new Core.Models.CanvasModels.Attachment() { DisplayName = filename, Url = filepath, Locked = false });
+                var endpoint = node.GetAttributeValue("data-api-endpoint", null);
+                if (endpoint == null)
+                    continue;
+                try
+                {
+                    files.Add(CanvasService.GetFile(endpoint));
+                }
+                catch (Exception ex)
+                {
+                    OnReportProgress.Invoke(new SyncState(SyncStateEnum.Progress, $"获取附件信息失败：{endpoint}\n{ex.Message}"));
+                }
             }
         }
         #endregion
@@ -756,7 +755,6 @@ namespace TodoSynchronizer.Core.Services
                     if (SyncConfig.Default.AnouncementConfig.CreateAttachments)
                     {
                         var files = anouncement.Attachments;
-                        var file_reg = new Regex(@"<a.+?instructure_file_link.+?title=""(.+?)"".+?href=""(.+?)"".+?</a>");
 
                         if (anouncement.Content != null)
                         {
@@ -1051,7 +1049,6 @@ namespace TodoSynchronizer.Core.Services
                     var exist = attachments.Any(x => x.Name == file.DisplayName);
                     if (!exist)
                     {
-                        file.Url = file.Url.UrlUnescape().EscToHtml();
                         Uri fulluri;
                         var isabsolute = Uri.TryCreate(file.Url, UriKind.Absolute, out fulluri);
                         if (!isabsolute)

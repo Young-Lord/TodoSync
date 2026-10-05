@@ -121,6 +121,21 @@ namespace TodoSynchronizer.Core.Services
             }
         }
 
+        /// <summary>
+        /// 获取文件 API 端点对应的 File 对象。
+        /// </summary>
+        public static Attachment GetFile(string api_endpoint)
+        {
+            var res = Web.Get(Client, api_endpoint);
+            if (!res.success)
+                throw new Exception(res.message);
+
+            if (res.code != System.Net.HttpStatusCode.OK)
+                throw new Exception($"[{(int)res.code} {res.code}] {res.result}");
+
+            return JsonConvert.DeserializeObject<Attachment>(res.result);
+        }
+
         public static List<QuizSubmission> ListQuizSubmissons(string course_id, string quiz_id)
         {
             var query = new Dictionary<string, string>();
