@@ -50,7 +50,7 @@ curl -d "client_id=49694ef2-8751-4ac9-8431-8817c27350b4&scope=Tasks.ReadWrite%20
 
 ![](https://s2.loli.net/2022/08/21/NzJRe4E5LSlYVGb.png)
 
-13. 编辑 graphtoken.asc 文件
+13. 编辑 .todosync/graphtoken.asc 文件
 
 ![](https://s2.loli.net/2022/09/14/6DLgz7mHQdVSnZ2.png)
 

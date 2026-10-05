@@ -2,6 +2,7 @@
 using TodoSynchronizer.Core.Services;
 using Newtonsoft.Json;
 using TodoSynchronizer.Core.Config;
+using TodoSynchronizer.Core.Helpers;
 using YamlDotNet.Serialization;
 using TodoSynchronizer.Core.Yaml;
 using File = System.IO.File;
@@ -15,7 +16,7 @@ class Program
     static void Main(string[] args)
     {
         string canvastoken = "", acmojtoken = "", graphtokenpath = "", didacredentialfile = "";
-        string configpath = "", graphtokenkey = "", offlinetokenfile = "";
+        string configpath = "", graphtokenkey = "", offlinetokenfile = "", statefilepath = "";
         bool local = false;
         OfflineTokenDto offlineToken = null;
         DidaCredential didaCredential = null;
@@ -40,6 +41,9 @@ class Program
             if (args[i] == "-didacredentialfile")
                 if (i + 1 < args.Length)
                     didacredentialfile = args[i + 1].Trim();
+            if (args[i] == "-statefile")
+                if (i + 1 < args.Length)
+                    statefilepath = args[i + 1].Trim();
             if (args[i] == "-local")
                 local = true;
         }
@@ -99,6 +103,7 @@ class Program
         {
             GraphLogin(graphtokenpath, graphtokenkey, offlinetokenfile, offlineToken);
 
+            SyncStateStore.FilePath = string.IsNullOrEmpty(statefilepath) ? null : statefilepath;
             SyncService sync = new SyncService();
             sync.OnReportProgress += OnReportProgress;
             sync.Go();

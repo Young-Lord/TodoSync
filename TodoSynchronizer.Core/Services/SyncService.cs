@@ -253,6 +253,8 @@ namespace TodoSynchronizer.Core.Services
             #endregion
 
             #region 完成
+            if (!SyncStateStore.Save())
+                OnReportProgress.Invoke(new SyncState(SyncStateEnum.Progress, $"保存同步状态失败：{SyncStateStore.FilePath}"));
             OnReportProgress.Invoke(new SyncState(
                 SyncStateEnum.Finished,
                 $"完成！已处理 {CourseCount} 门课程中的 {ItemCount} 个项目，更新 {UpdateCount} 个项目"
@@ -908,10 +910,13 @@ namespace TodoSynchronizer.Core.Services
 
             if (todoTaskOld == null && config.CreateContent || todoTaskOld != null && config.UpdateContent)
             {
-                var content = CanvasStringTemplateHelper.GetContent(item);
-                if (todoTaskOld == null || todoTaskOld.Body.Content == null || content.Trim() != todoTaskOld.Body.Content.Trim())
+                var content = CanvasStringTemplateHelper.GetHtmlContent(item);
+                // The API returns a plain text projection of an HTML body, so the stored body
+                // cannot be compared with what would be written; the state records what was.
+                if (todoTaskOld == null || todoTaskOld.Body == null || todoTaskOld.Body.Content == null
+                    || !SyncStateStore.IsCurrent(todoTaskOld.Id, content))
                 {
-                    todoTaskNew.Body = new ItemBody() { ContentType = BodyType.Text };
+                    todoTaskNew.Body = new ItemBody() { ContentType = BodyType.Html };
                     todoTaskNew.Body.Content = content;
                     modified = true;
                 }

@@ -92,6 +92,7 @@ namespace TodoSynchronizer.Core.Services
             var res = client.Me.Todo.Lists[$"{tasklistid}"].Tasks
                 .Request()
                 .AddAsync(task).Result;
+            SyncStateStore.Remember(res.Id, task.Body?.Content);
             return res;
         }
 
@@ -108,6 +109,7 @@ namespace TodoSynchronizer.Core.Services
             var todoTask = client.Me.Todo.Lists[$"{tasklistid}"].Tasks[$"{taskid}"]
                  .Request()
                  .UpdateAsync(task).Result;
+            SyncStateStore.Remember(todoTask.Id, task.Body?.Content);
             return todoTask;
         }
 

@@ -26,7 +26,9 @@ namespace TodoSynchronizer.Core.Helpers
             @"[\p{IsCJKUnifiedIdeographs}\p{IsCJKUnifiedIdeographsExtensionA}]",
             RegexOptions.Compiled);
         // Instance variables
-        protected TextBuilder _text;
+        protected IContentWriter _text;
+        // Base address used to resolve relative links when writing HTML.
+        private Uri _baseUri;
         // Set while walking the first child of <pre>, whose leading whitespace is dropped.
         private bool _skipPreLeadingWhitespace;
         // Static constructor (one time only)
@@ -77,17 +79,30 @@ namespace TodoSynchronizer.Core.Helpers
         /// <returns>Resulting plain text</returns>
         public string Convert(string html)
         {
+            return ConvertWith(html, new TextBuilder(), null);
+        }
+        // Renders the content as HTML for a task body: links stay clickable, line breaks stay
+        // line breaks and every other character is escaped. Relative links are resolved
+        // against the base address the content was fetched from.
+        public string ConvertHtml(string html, string baseUrl)
+        {
+            return ConvertWith(html, new HtmlBuilder(), baseUrl);
+        }
+        private string ConvertWith(string html, IContentWriter writer, string baseUrl)
+        {
             if (html == null)
                 return "";
             var doc = new HtmlDocument();
             doc.LoadHtml(html);
             var equationTexts = new List<string>();
-            _text = new TextBuilder();
+            _text = writer;
+            _baseUri = null;
+            if (baseUrl != null)
+                Uri.TryCreate(baseUrl, UriKind.Absolute, out _baseUri);
             // Content outside <body> is dropped, as it would be when rendering the page.
             var body = doc.DocumentNode.SelectSingleNode("//body");
             Walk(body ?? doc.DocumentNode, equationTexts);
-            var plainText = HttpUtility.HtmlDecode(_text.ToString());
-            return ExpandEquationPlaceholders(plainText, equationTexts);
+            return ExpandEquationPlaceholders(_text.Finish(_text.ToString()), equationTexts);
         }
         // Writes the plain text of a node's children in document order. Comments and any
         // other non-text, non-element nodes are dropped.
@@ -104,7 +119,9 @@ namespace TodoSynchronizer.Core.Helpers
                         _skipPreLeadingWhitespace = false;
                     }
                     // Outside <pre>, whitespace only separates words.
-                    _text.Write(_text.Preformatted ? text : CollapseWhitespace(text));
+                    if (!_text.Preformatted)
+                        text = CollapseWhitespace(text);
+                    _text.Write(_text.PrepareText(text));
                 }
                 else
                 {
@@ -124,7 +141,7 @@ namespace TodoSynchronizer.Core.Helpers
                 var latex = GetEquationLatex(element);
                 if (!string.IsNullOrEmpty(latex))
                 {
-                    equationTexts.Add(InlineMathDelimiter + latex + InlineMathDelimiter);
+                    equationTexts.Add(InlineMathDelimiter + _text.EscapeText(latex) + InlineMathDelimiter);
                     _text.Write(EquationPlaceholderStart + (equationTexts.Count - 1).ToString() + EquationPlaceholderEnd);
                     return;
                 }
@@ -135,13 +152,13 @@ namespace TodoSynchronizer.Core.Helpers
                 _text.Write(value);
             if (_ignoreTags.Contains(name))
                 return;
-            var href = name == "a" ? element.GetAttributeValue("href", null) : null;
+            var href = name == "a" ? ResolveUrl(element.GetAttributeValue("href", null)) : null;
             if (href != null)
             {
-                // Links are written as [text](url).
-                _text.Write("[");
+                // Links become [text](url) in plain text and <a href="url">text</a> in HTML.
+                _text.StartLink(href);
                 Walk(element, equationTexts);
-                _text.Write("](" + href + ")");
+                _text.EndLink(href);
             }
             else
             {
@@ -169,6 +186,14 @@ namespace TodoSynchronizer.Core.Helpers
             foreach (var c in text)
                 result.Append(char.IsWhiteSpace(c) ? ' ' : c);
             return result.ToString();
+        }
+        // Resolves a relative link against the base address the content was fetched from.
+        private string ResolveUrl(string url)
+        {
+            if (url == null || _baseUri == null)
+                return url;
+            Uri absolute;
+            return Uri.TryCreate(_baseUri, url, out absolute) ? absolute.AbsoluteUri : url;
         }
         // Drops the whitespace that follows <pre>, up to and including the first line
         // break, the way a browser ignores the line break after the opening tag.
@@ -225,9 +250,29 @@ namespace TodoSynchronizer.Core.Helpers
         }
 
         /// <summary>
+        /// Collects the document as it is walked. The plain text and the HTML variants
+        /// differ in how they treat entities, whitespace, line breaks and links.
+        /// </summary>
+        protected interface IContentWriter
+        {
+            bool Preformatted { get; set; }
+            void Write(char c);
+            void Write(string s);
+            void Clear();
+            // Text of one node, ready to be written: the plain text writer keeps entities in
+            // place for the final decode, while HTML needs them resolved before escaping.
+            string PrepareText(string text);
+            void StartLink(string href);
+            void EndLink(string href);
+            // Escapes text inserted after the walk, i.e. the LaTeX of an equation.
+            string EscapeText(string text);
+            // Turns the collected text into the result of the conversion.
+            string Finish(string text);
+        }
+        /// <summary>
         /// A StringBuilder class that helps eliminate excess whitespace.
         /// </summary>
-        protected class TextBuilder
+        protected class TextBuilder : IContentWriter
         {
             private StringBuilder _text;
             private StringBuilder _currLine;
@@ -343,6 +388,28 @@ namespace TodoSynchronizer.Core.Helpers
                 // Reset current line
                 _currLine.Length = 0;
             }
+            public string PrepareText(string text)
+            {
+                // Entities are decoded once at the end, so that neither a line break nor an
+                // escaped space is collapsed after it was decoded.
+                return text;
+            }
+            public void StartLink(string href)
+            {
+                Write('[');
+            }
+            public void EndLink(string href)
+            {
+                Write("](" + href + ")");
+            }
+            public string EscapeText(string text)
+            {
+                return text;
+            }
+            public string Finish(string text)
+            {
+                return HttpUtility.HtmlDecode(text);
+            }
             /// <summary>
             /// Returns the current output as a string.
             /// </summary>
@@ -351,6 +418,133 @@ namespace TodoSynchronizer.Core.Helpers
                 if (_currLine.Length > 0)
                     FlushCurrLine();
                 return _text.ToString();
+            }
+        }
+        /// <summary>
+        /// Collects the document as HTML: characters are escaped, line breaks become line
+        /// breaks and links become anchors. Whitespace is collapsed the way a browser shows
+        /// it, so the source formatting of the content does not leak into the result.
+        /// </summary>
+        protected class HtmlBuilder : IContentWriter
+        {
+            private readonly StringBuilder _html = new StringBuilder();
+            private bool _preformatted;
+            // Line breaks written so far, to collapse the empty ones.
+            private int _breaks;
+            public bool Preformatted
+            {
+                get { return _preformatted; }
+                set { _preformatted = value; }
+            }
+            public void Clear()
+            {
+                _html.Length = 0;
+                _breaks = 0;
+            }
+            public void Write(string s)
+            {
+                foreach (char c in s)
+                    Write(c);
+            }
+            public void Write(char c)
+            {
+                if (c == '\r')
+                    return;
+                if (c == '\n')
+                {
+                    WriteLineBreak();
+                    return;
+                }
+                if (Char.IsWhiteSpace(c))
+                {
+                    WriteSpace();
+                    return;
+                }
+                WriteEscaped(c);
+            }
+            public string PrepareText(string text)
+            {
+                return HttpUtility.HtmlDecode(text);
+            }
+            public void StartLink(string href)
+            {
+                _breaks = 0;
+                // The attribute value still holds its entities, which an attribute of the
+                // result has to escape again.
+                _html.Append("<a href=\"").Append(EscapeAttribute(HttpUtility.HtmlDecode(href))).Append("\">");
+            }
+            public void EndLink(string href)
+            {
+                _html.Append("</a>");
+            }
+            public string EscapeText(string text)
+            {
+                var result = new StringBuilder();
+                foreach (char c in text)
+                    AppendEscaped(result, c);
+                return result.ToString();
+            }
+            public string Finish(string text)
+            {
+                return text;
+            }
+            public override string ToString()
+            {
+                return _html.ToString();
+            }
+            private void WriteLineBreak()
+            {
+                TrimTrailingSpaces();
+                if (_html.Length == 0 || _breaks >= 2)
+                    return;
+                _html.Append("<br>");
+                _breaks++;
+            }
+            private void WriteSpace()
+            {
+                if (_html.Length == 0)
+                    return;
+                // Never write a second space in a row.
+                if (_html[_html.Length - 1] == ' ')
+                    return;
+                _html.Append(' ');
+            }
+            private void TrimTrailingSpaces()
+            {
+                while (_html.Length > 0 && _html[_html.Length - 1] == ' ')
+                    _html.Length--;
+            }
+            private void WriteEscaped(char c)
+            {
+                _breaks = 0;
+                AppendEscaped(_html, c);
+            }
+            private static void AppendEscaped(StringBuilder target, char c)
+            {
+                switch (c)
+                {
+                    case '&': target.Append("&amp;"); break;
+                    case '<': target.Append("&lt;"); break;
+                    case '>': target.Append("&gt;"); break;
+                    default: target.Append(c); break;
+                }
+            }
+            private static string EscapeAttribute(string value)
+            {
+                var result = new StringBuilder();
+                foreach (char c in value)
+                {
+                    switch (c)
+                    {
+                        case '&': result.Append("&amp;"); break;
+                        case '"': result.Append("&quot;"); break;
+                        case '\'': result.Append("&#39;"); break;
+                        case '<': result.Append("&lt;"); break;
+                        case '>': result.Append("&gt;"); break;
+                        default: result.Append(c); break;
+                    }
+                }
+                return result.ToString();
             }
         }
     }

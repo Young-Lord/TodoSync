@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using TodoSynchronizer.Core.Config;
 using TodoSynchronizer.Core.Models.CanvasModels;
+using TodoSynchronizer.Core.Services;
 
 namespace TodoSynchronizer.Core.Helpers
 {
@@ -80,6 +81,13 @@ namespace TodoSynchronizer.Core.Helpers
         {
             HtmlHelper convert = new HtmlHelper();
             return convert.Convert(item.Content);
+        }
+
+        // The task body as HTML, so that links stay clickable and line breaks stay line breaks.
+        public static string GetHtmlContent(ICanvasItem item)
+        {
+            HtmlHelper convert = new HtmlHelper();
+            return convert.ConvertHtml(item.Content, CanvasService.Client.BaseAddress?.ToString());
         }
 
         public static string GetContent(string content)

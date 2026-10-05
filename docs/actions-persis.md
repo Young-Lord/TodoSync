@@ -66,7 +66,7 @@
 
 ![](https://s2.loli.net/2022/08/21/NzJRe4E5LSlYVGb.png)
 
-18. 编辑 graphtoken.asc 文件
+18. 编辑 .todosync/graphtoken.asc 文件
 
 ![](https://s2.loli.net/2022/09/14/6DLgz7mHQdVSnZ2.png)
 
