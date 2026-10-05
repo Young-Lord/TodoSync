@@ -343,21 +343,6 @@ namespace TodoSynchronizer.Core.Services
                             }
                         }
 
-                    //---Attachments---//
-                    //if (SyncConfig.Default.AssignmentConfig.CreateAttachments)
-                    //{
-                    //    var files = new List<Models.CanvasModels.Attachment>();
-
-                    //    if (assignment.Content != null)
-                    //    {
-                    //        CheckAttachments(assignment.Content, files);
-                    //    }
-
-                    //    if (files.Count > 0)
-                    //    {
-                    //        updated |= UploadAttachments(taskList, didaTask, files);
-                    //    }
-                    //}
                         
                     if (updated)
                         UpdateCount++;
@@ -505,21 +490,6 @@ namespace TodoSynchronizer.Core.Services
                         updated = true;
                     }
 
-                    //---Attachments---//
-                    //if (SyncConfig.Default.DiscussionConfig.CreateAttachments)
-                    //{
-                    //    var files = discussion.Attachments;
-                        
-                    //    if (discussion.Content != null)
-                    //    {
-                    //        CheckAttachments(discussion.Content, files);
-                    //    }
-
-                    //    if (files.Count > 0)
-                    //    {
-                    //        updated |= UploadAttachments(taskList, didaTask, files);
-                    //    }
-                    //}
                         
                     if (updated)
                         UpdateCount++;
@@ -615,21 +585,6 @@ namespace TodoSynchronizer.Core.Services
                             }
                         
                         }
-                    //---Attachments---//
-                    //if (SyncConfig.Default.QuizConfig.CreateAttachments)
-                    //{
-                    //    var files = new List<Models.CanvasModels.Attachment>();
-
-                    //    if (assignment.Content != null)
-                    //    {
-                    //        CheckAttachments(assignment.Content, files);
-                    //    }
-                        
-                    //    if (files.Count > 0)
-                    //    {
-                    //        updated |= UploadAttachments(taskList, didaTask, files);
-                    //    }
-                    //}
                     
                     if (updated)
                         UpdateCount++;
@@ -690,22 +645,6 @@ namespace TodoSynchronizer.Core.Services
                         updated = true;
                     }
 
-                    //---Attachments---//
-                    //if (SyncConfig.Default.AnouncementConfig.CreateAttachments)
-                    //{
-                    //    var files = anouncement.Attachments;
-                    //    var file_reg = new Regex(@"<a.+?instructure_file_link.+?title=""(.+?)"".+?href=""(.+?)"".+?</a>");
-
-                    //    if (anouncement.Content != null)
-                    //    {
-                    //        CheckAttachments(anouncement.Content, files);
-                    //    }
-                        
-                    //    if (files.Count > 0)
-                    //    {
-                    //        updated |= UploadAttachments(taskList, didaTask, files);
-                    //    }
-                    //}
                         
                     if (updated)
                         UpdateCount++;
@@ -1040,107 +979,6 @@ namespace TodoSynchronizer.Core.Services
         }
 
 
-        #endregion
-
-        #region Attachments
-        //private static void CheckAttachments(string content, List<Models.CanvasModels.Attachment> files)
-        //{
-        //    var file_reg = new Regex(@"<a.+?instructure_file_link.+?title=""(.+?)"".+?href=""(.+?)"".+?</a>");
-        //    var file_matches = file_reg.Matches(content);
-        //    var img_reg = new Regex(@"<img.+?src=""(.+?)"".+?alt=""(.+?)"".+?>");
-        //    var img_matches = img_reg.Matches(content);
-        //    foreach (Match match in file_matches)
-        //    {
-        //        var filename = match.Groups[1].Value;
-        //        var filepath = match.Groups[2].Value;
-        //        files.Add(new Core.Models.CanvasModels.Attachment() { DisplayName = filename, Url = filepath, Locked = false });
-        //    }
-        //    foreach (Match match in img_matches)
-        //    {
-        //        var filename = match.Groups[2].Value;
-        //        var filepath = match.Groups[1].Value;
-        //        files.Add(new Core.Models.CanvasModels.Attachment() { DisplayName = filename, Url = filepath, Locked = false });
-        //    }
-        //}
-
-        //private bool UploadAttachments(DidaTaskList taskList, DidaTask didaTask, List<Models.CanvasModels.Attachment> files)
-        //{
-        //    var updated = false;
-        //    try
-        //    {
-        //        var attachments = DidaService.ListAttachments(taskList.Id.ToString(), didaTask.Id.ToString());
-        //        foreach (var file in files)
-        //        {
-        //            var exist = attachments.Any(x => x.Name == file.DisplayName);
-        //            if (!exist)
-        //            {
-        //                file.Url = file.Url.UrlUnescape().EscToHtml();
-        //                Uri fulluri;
-        //                var isabsolute = Uri.TryCreate(file.Url, UriKind.Absolute, out fulluri);
-        //                if (!isabsolute)
-        //                {
-        //                    var urires = Uri.TryCreate(new Uri("https://oc.sjtu.edu.cn"), file.Url, out fulluri);
-        //                    if (!urires)
-        //                        throw new Exception($"Uri无效：{file.Url}");
-        //                }
-
-        //                HttpClient client = CanvasService.Client;
-        //                HttpResponseMessage res = null;
-        //                try
-        //                {
-        //                    var datatask = client.GetAsync(fulluri);
-        //                    //datatask.RunSynchronously();
-        //                    datatask.Wait();
-        //                    res = datatask.GetAwaiter().GetResult();
-        //                }
-        //                catch (Exception ex)
-        //                {
-        //                    throw new Exception($"获取文件时发生错误\n{fulluri.AbsoluteUri}\n{ex.Message}");
-        //                }
-
-        //                if (res.StatusCode != HttpStatusCode.OK)
-        //                    throw new Exception($"获取文件时发生错误\n{fulluri.AbsoluteUri}\n[{(int)res.StatusCode} {res.StatusCode.ToString()}] {res.Content.ReadAsStringAsync().Result}");
-        //                var data = res.Content.ReadAsByteArrayAsync().Result;
-
-        //                if (data.Length > 25 * 1024 * 1024) continue;
-        //                Stream stream = new MemoryStream(data);
-
-        //                //HttpWebRequest req = (HttpWebRequest)WebRequest.Create(fulluri);
-        //                //req.Method = "GET";
-        //                //HttpWebResponse resp = null;
-        //                //resp = (HttpWebResponse)req.GetResponse();
-        //                //Stream stream = null;
-        //                //stream = resp.GetResponseStream();
-        //                //MemoryStream ms = new MemoryStream();
-        //                //stream.CopyTo(ms);
-        //                //var data = StreamToBytes(ms);
-
-        //                AttachmentInfo info = new AttachmentInfo();
-        //                info.AttachmentType = AttachmentType.File;
-        //                info.Size = data.Length;
-        //                info.Name = file.DisplayName;
-
-        //                DidaService.UploadAttachment(taskList.Id.ToString(), didaTask.Id.ToString(), info, stream);
-        //                updated = true;
-        //            }
-        //        }
-        //        return updated;
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        OnReportProgress.Invoke(new SyncState(SyncStateEnum.Progress, $"上传文件失败：{ex.Message}"));
-        //        return false;
-        //    }
-        //}
-
-        //public static byte[] StreamToBytes(Stream stream)
-        //{
-
-        //    byte[] bytes = new byte[stream.Length];
-        //    stream.Read(bytes, 0, bytes.Length);
-        //    stream.Seek(0, SeekOrigin.Begin);
-        //    return bytes;
-        //}
         #endregion
     }
 }
