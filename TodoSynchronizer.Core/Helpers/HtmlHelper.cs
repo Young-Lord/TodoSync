@@ -27,8 +27,8 @@ namespace TodoSynchronizer.Core.Helpers
             RegexOptions.Compiled);
         // Instance variables
         protected TextBuilder _text;
-        protected string _html;
-        protected int _pos;
+        // Set while walking the first child of <pre>, whose leading whitespace is dropped.
+        private bool _skipPreLeadingWhitespace;
         // Static constructor (one time only)
         static HtmlHelper()
         {
@@ -79,69 +79,109 @@ namespace TodoSynchronizer.Core.Helpers
         {
             if (html == null)
                 return "";
-            //Hack <a>
-            var reg = new Regex(@"<a.*?href=""(.+?)"".+?>(.*?)</a>");
-            html = reg.Replace(html, x => $"[{x.Groups[2].Value}]({x.Groups[1].Value})");
-            // Replace Canvas equation images with placeholders before tag stripping,
-            // so the LaTeX is neither discarded nor reprocessed as HTML.
+            var doc = new HtmlDocument();
+            doc.LoadHtml(html);
             var equationTexts = new List<string>();
-            html = ReplaceEquationImages(html, equationTexts);
-            // Initialize state variables
             _text = new TextBuilder();
-            _html = html;
-            _pos = 0;
-            // Process input
-            while (!EndOfText)
+            // Content outside <body> is dropped, as it would be when rendering the page.
+            var body = doc.DocumentNode.SelectSingleNode("//body");
+            Walk(body ?? doc.DocumentNode, equationTexts);
+            var plainText = HttpUtility.HtmlDecode(_text.ToString());
+            return ExpandEquationPlaceholders(plainText, equationTexts);
+        }
+        // Writes the plain text of a node's children in document order. Comments and any
+        // other non-text, non-element nodes are dropped.
+        private void Walk(HtmlNode parent, List<string> equationTexts)
+        {
+            foreach (var node in parent.ChildNodes)
             {
-                if (NextChar() == '<')
+                if (node.NodeType == HtmlNodeType.Text)
                 {
-                    // HTML tag
-                    bool selfClosing;
-                    string tag = ParseTag(out selfClosing);
-                    // Handle special tag cases
-                    if (tag == "body")
+                    var text = ((HtmlTextNode)node).Text ?? "";
+                    if (_skipPreLeadingWhitespace)
                     {
-                        // Discard content before <body>
-                        _text.Clear();
+                        text = SkipPreLeadingWhitespace(text);
+                        _skipPreLeadingWhitespace = false;
                     }
-                    else if (tag == "/body")
-                    {
-                        // Discard content after </body>
-                        _pos = _html.Length;
-                    }
-                    else if (tag == "pre")
-                    {
-                        // Enter preformatted mode
-                        _text.Preformatted = true;
-                        EatWhitespaceToNextLine();
-                    }
-                    else if (tag == "/pre")
-                    {
-                        // Exit preformatted mode
-                        _text.Preformatted = false;
-                    }
-                    string value;
-                    if (_tags.TryGetValue(tag, out value))
-                        _text.Write(value);
-                    if (_ignoreTags.Contains(tag))
-                        EatInnerContent(tag);
-                }
-                else if (Char.IsWhiteSpace(NextChar()))
-                {
-                    // Whitespace (treat all as space)
-                    _text.Write(_text.Preformatted ? NextChar() : ' ');
-                    MoveNext();
+                    // Outside <pre>, whitespace only separates words.
+                    _text.Write(_text.Preformatted ? text : CollapseWhitespace(text));
                 }
                 else
                 {
-                    // Other text
-                    _text.Write(NextChar());
-                    MoveNext();
+                    // Only text can be the first thing inside <pre>.
+                    _skipPreLeadingWhitespace = false;
+                    if (node.NodeType == HtmlNodeType.Element)
+                        WalkElement(node, equationTexts);
                 }
             }
-            // Return result
-            var plainText = HttpUtility.HtmlDecode(_text.ToString());
-            return ExpandEquationPlaceholders(plainText, equationTexts);
+        }
+        // Writes one element: the text of its own tag, of its children and of its closing
+        // tag. Elements in _ignoreTags contribute only the text of their tags.
+        private void WalkElement(HtmlNode element, List<string> equationTexts)
+        {
+            if (IsEquationImage(element))
+            {
+                var latex = GetEquationLatex(element);
+                if (!string.IsNullOrEmpty(latex))
+                {
+                    equationTexts.Add(InlineMathDelimiter + latex + InlineMathDelimiter);
+                    _text.Write(EquationPlaceholderStart + (equationTexts.Count - 1).ToString() + EquationPlaceholderEnd);
+                    return;
+                }
+            }
+            var name = element.Name.ToLowerInvariant();
+            string value;
+            if (_tags.TryGetValue(name, out value))
+                _text.Write(value);
+            if (_ignoreTags.Contains(name))
+                return;
+            var href = name == "a" ? element.GetAttributeValue("href", null) : null;
+            if (href != null)
+            {
+                // Links are written as [text](url).
+                _text.Write("[");
+                Walk(element, equationTexts);
+                _text.Write("](" + href + ")");
+            }
+            else
+            {
+                var preformatted = name == "pre";
+                if (preformatted)
+                {
+                    _text.Preformatted = true;
+                    _skipPreLeadingWhitespace = true;
+                }
+                Walk(element, equationTexts);
+                if (preformatted)
+                {
+                    _skipPreLeadingWhitespace = false;
+                    _text.Preformatted = false;
+                }
+            }
+            if (_tags.TryGetValue("/" + name, out value))
+                _text.Write(value);
+        }
+        // Replaces every whitespace character with a space, so that line breaks in the
+        // source do not become line breaks in the text outside of <pre>.
+        private static string CollapseWhitespace(string text)
+        {
+            var result = new StringBuilder(text.Length);
+            foreach (var c in text)
+                result.Append(char.IsWhiteSpace(c) ? ' ' : c);
+            return result.ToString();
+        }
+        // Drops the whitespace that follows <pre>, up to and including the first line
+        // break, the way a browser ignores the line break after the opening tag.
+        private static string SkipPreLeadingWhitespace(string text)
+        {
+            var pos = 0;
+            while (pos < text.Length && char.IsWhiteSpace(text[pos]))
+            {
+                var c = text[pos++];
+                if (c == '\n')
+                    break;
+            }
+            return text.Substring(pos);
         }
         // Restores the LaTeX text captured before tag stripping. The replacement is
         // done last so the LaTeX is never decoded or whitespace-collapsed as HTML.
@@ -167,44 +207,11 @@ namespace TodoSynchronizer.Core.Helpers
         {
             return ChineseCharacterRegex.IsMatch(c.ToString());
         }
-        // Replaces Canvas equation images with placeholders, keeping the LaTeX aside, so
-        // the HTML-to-text pass neither discards it nor treats it as markup. The offsets
-        // are taken from the parsed document, because attribute values may contain '>' or
-        // newlines (Canvas embeds multi-line MathML in x-canvaslms-safe-mathml).
-        private static string ReplaceEquationImages(string html, List<string> equationTexts)
-        {
-            var doc = new HtmlDocument();
-            doc.LoadHtml(html);
-            var equations = new List<(int Start, int End, string Latex)>();
-            foreach (var node in doc.DocumentNode.Descendants("img"))
-            {
-                if (!IsEquationImage(node))
-                    continue;
-                var latex = GetEquationLatex(node);
-                if (string.IsNullOrEmpty(latex))
-                    continue;
-                var start = node.OuterStartIndex;
-                var end = Math.Min(start + node.OriginalOuterLength, html.Length);
-                if (start < 0 || end <= start || html[end - 1] != '>')
-                    continue;
-                equations.Add((start, end, latex));
-            }
-            if (equations.Count == 0)
-                return html;
-            var result = new StringBuilder(html);
-            // Replace back to front so the offsets of the pending equations stay valid.
-            for (var i = equations.Count - 1; i >= 0; i--)
-            {
-                var (start, end, latex) = equations[i];
-                equationTexts.Add(InlineMathDelimiter + latex + InlineMathDelimiter);
-                var placeholder = EquationPlaceholderStart + (equationTexts.Count - 1).ToString() + EquationPlaceholderEnd;
-                result.Remove(start, end - start).Insert(start, placeholder);
-            }
-            return result.ToString();
-        }
-        // True when the image element is a Canvas math equation.
+        // True when the element is an image holding a Canvas math equation.
         private static bool IsEquationImage(HtmlNode node)
         {
+            if (node.Name != "img")
+                return false;
             var className = node.GetAttributeValue("class", null);
             return className != null
                 && className.Split(new[] { ' ', '\t', '\r', '\n', '\f' }, StringSplitOptions.RemoveEmptyEntries)
@@ -216,112 +223,7 @@ namespace TodoSynchronizer.Core.Helpers
             var value = HttpUtility.HtmlDecode(node.GetAttributeValue("data-equation-content", null));
             return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
         }
-        // Eats all characters that are part of the current tag
-        // and returns information about that tag
-        protected string ParseTag(out bool selfClosing)
-        {
-            string tag = String.Empty;
-            selfClosing = false;
-            if (NextChar() == '<')
-            {
-                MoveNext();
-                // Parse tag name
-                EatWhitespace();
-                int start = _pos;
-                if (NextChar() == '/')
-                    MoveNext();
-                while (!EndOfText && !Char.IsWhiteSpace(NextChar()) &&
-                  NextChar() != '/' && NextChar() != '>')
-                    MoveNext();
-                tag = _html.Substring(start, _pos - start).ToLower();
-                // Parse rest of tag
-                while (!EndOfText && NextChar() != '>')
-                {
-                    if (NextChar() == '"' || NextChar() == '\'')
-                        EatQuotedValue();
-                    else
-                    {
-                        if (NextChar() == '/')
-                            selfClosing = true;
-                        MoveNext();
-                    }
-                }
-                MoveNext();
-            }
-            return tag;
-        }
-        // Consumes inner content from the current tag
-        protected void EatInnerContent(string tag)
-        {
-            string endTag = "/" + tag;
-            while (!EndOfText)
-            {
-                if (NextChar() == '<')
-                {
-                    // Consume a tag
-                    bool selfClosing;
-                    if (ParseTag(out selfClosing) == endTag)
-                        return;
-                    // Use recursion to consume nested tags
-                    if (!selfClosing && !tag.StartsWith("/"))
-                        EatInnerContent(tag);
-                }
-                else MoveNext();
-            }
-        }
-        // Returns true if the current position is at the end of
-        // the string
-        protected bool EndOfText
-        {
-            get { return (_pos >= _html.Length); }
-        }
-        // Safely returns the character at the current position
-        protected char NextChar()
-        {
-            return (_pos < _html.Length) ? _html[_pos] : (char)0;
-        }
-        // Safely advances to current position to the next character
-        protected void MoveNext()
-        {
-            _pos = Math.Min(_pos + 1, _html.Length);
-        }
-        // Moves the current position to the next non-whitespace
-        // character.
-        protected void EatWhitespace()
-        {
-            while (Char.IsWhiteSpace(NextChar()))
-                MoveNext();
-        }
-        // Moves the current position to the next non-whitespace
-        // character or the start of the next line, whichever
-        // comes first
-        protected void EatWhitespaceToNextLine()
-        {
-            while (Char.IsWhiteSpace(NextChar()))
-            {
-                char c = NextChar();
-                MoveNext();
-                if (c == '\n')
-                    break;
-            }
-        }
-        // Moves the current position past a quoted value
-        protected void EatQuotedValue()
-        {
-            char c = NextChar();
-            if (c == '"' || c == '\'')
-            {
-                // Opening quote
-                MoveNext();
-                // Find end of value
-                int start = _pos;
-                _pos = _html.IndexOfAny(new char[] { c, '\r', '\n' }, _pos);
-                if (_pos < 0)
-                    _pos = _html.Length;
-                else
-                    MoveNext();  // Closing quote
-            }
-        }
+
         /// <summary>
         /// A StringBuilder class that helps eliminate excess whitespace.
         /// </summary>
