@@ -14,9 +14,9 @@ namespace TodoSynchronizer.Core.Helpers
                 switch (config.DueDateMode)
                 {
                     case AcmOjDueDateMode.end_time:
-                        return problemset.EndTime ?? problemset.LateSubmissionDeadline;
+                        return DueDateRule.Apply(problemset.EndTime ?? problemset.LateSubmissionDeadline);
                     case AcmOjDueDateMode.late_submission_deadline:
-                        return problemset.LateSubmissionDeadline ?? problemset.EndTime;
+                        return DueDateRule.Apply(problemset.LateSubmissionDeadline ?? problemset.EndTime);
                     default:
                         return null;
                 }
@@ -25,9 +25,9 @@ namespace TodoSynchronizer.Core.Helpers
             switch (config.DueDateMode)
             {
                 case AcmOjDueDateMode.end_time:
-                    return problemset.EndTime;
+                    return DueDateRule.Apply(problemset.EndTime);
                 case AcmOjDueDateMode.late_submission_deadline:
-                    return problemset.LateSubmissionDeadline;
+                    return DueDateRule.Apply(problemset.LateSubmissionDeadline);
                 default:
                     return null;
             }

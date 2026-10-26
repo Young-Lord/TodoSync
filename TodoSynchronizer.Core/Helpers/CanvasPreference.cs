@@ -46,9 +46,9 @@ namespace TodoSynchronizer.Core.Helpers
                 case RemindMode.unlock_at:
                     return quiz.UnlockAt;
                 case RemindMode.before_due_at:
-                    return quiz.DueAt == null ? null : quiz.DueAt - SyncConfig.Default.QuizConfig.BeforeTimeSpan;
+                    return DueDateRule.Apply(quiz.DueAt) - SyncConfig.Default.QuizConfig.BeforeTimeSpan;
                 case RemindMode.before_lock_at:
-                    return quiz.LockAt == null ? null : quiz.LockAt - SyncConfig.Default.QuizConfig.BeforeTimeSpan;
+                    return DueDateRule.Apply(quiz.LockAt) - SyncConfig.Default.QuizConfig.BeforeTimeSpan;
                 default:
                     return null;
             }
@@ -59,9 +59,9 @@ namespace TodoSynchronizer.Core.Helpers
             switch (SyncConfig.Default.QuizConfig.DueDateMode)
             {
                 case DueDateMode.due_at:
-                    return quiz.DueAt;
+                    return DueDateRule.Apply(quiz.DueAt);
                 case DueDateMode.lock_at:
-                    return quiz.LockAt;
+                    return DueDateRule.Apply(quiz.LockAt);
                 default:
                     return null;
             }
@@ -82,9 +82,9 @@ namespace TodoSynchronizer.Core.Helpers
                 case RemindMode.unlock_at:
                     return assignment.UnlockAt;
                 case RemindMode.before_due_at:
-                    return assignment.DueAt == null ? null : assignment.DueAt - SyncConfig.Default.AssignmentConfig.BeforeTimeSpan;
+                    return DueDateRule.Apply(assignment.DueAt) - SyncConfig.Default.AssignmentConfig.BeforeTimeSpan;
                 case RemindMode.before_lock_at:
-                    return assignment.LockAt == null ? null : assignment.LockAt - SyncConfig.Default.AssignmentConfig.BeforeTimeSpan;
+                    return DueDateRule.Apply(assignment.LockAt) - SyncConfig.Default.AssignmentConfig.BeforeTimeSpan;
                 default:
                     return null;
             }
@@ -97,9 +97,9 @@ namespace TodoSynchronizer.Core.Helpers
                 switch (SyncConfig.Default.AssignmentConfig.DueDateMode)
                 {
                     case DueDateMode.due_at:
-                        return assignment.DueAt ?? assignment.LockAt;
+                        return DueDateRule.Apply(assignment.DueAt ?? assignment.LockAt);
                     case DueDateMode.lock_at:
-                        return assignment.LockAt ?? assignment.DueAt;
+                        return DueDateRule.Apply(assignment.LockAt ?? assignment.DueAt);
                     default:
                         return null;
                 }
@@ -109,9 +109,9 @@ namespace TodoSynchronizer.Core.Helpers
                 switch (SyncConfig.Default.AssignmentConfig.DueDateMode)
                 {
                     case DueDateMode.due_at:
-                        return assignment.DueAt;
+                        return DueDateRule.Apply(assignment.DueAt);
                     case DueDateMode.lock_at:
-                        return assignment.LockAt;
+                        return DueDateRule.Apply(assignment.LockAt);
                     default:
                         return null;
                 }
